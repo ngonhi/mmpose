@@ -1,4 +1,4 @@
-_base_ = ['..//_base_/datasets/ID_card.py']
+_base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
 resume_from = None
@@ -19,7 +19,7 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=0.001,
     step=[200, 260])
-total_epochs = 300
+total_epochs = 5
 log_config = dict(
     interval=1,
     hooks=[
@@ -109,7 +109,7 @@ model = dict(
         img_size=data_cfg['image_size']),
     test_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
-        max_num_people=30,
+        max_num_people=5,
         scale_factor=[1],
         with_heatmaps=[True, True],
         with_ae=[True, False],
@@ -142,7 +142,7 @@ train_pipeline = [
     dict(
         type='BottomUpGenerateTarget',
         sigma=2,
-        max_num_people=4,
+        max_num_people=5,
     ),
     dict(
         type='Collect',
@@ -173,26 +173,26 @@ val_pipeline = [
 
 test_pipeline = val_pipeline
 
-data_root = 'data/ID_card'
+data_root = '/root/ID_card/ID_card_data'
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=8,
     workers_per_gpu=1,
     train=dict(
-        type='BottomUpCocoDataset',
+        type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/train_annotations.json',
         img_prefix=f'{data_root}/train/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
     val=dict(
-        type='BottomUpCocoDataset',
+        type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/val_annotations.json',
         img_prefix=f'{data_root}/val/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),
     test=dict(
-        type='BottomUpCocoDataset',
+        type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/val_annotations.json',
         img_prefix=f'{data_root}/val/',
         data_cfg=data_cfg,
