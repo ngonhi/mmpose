@@ -213,21 +213,20 @@ class AssociativeEmbedding(BasePose):
             center (np.ndarray): center of image
             scale (np.ndarray): the scale of image
         """
-        # assert img.size(0) == 1
-        # assert len(img_metas) == 1
-        # print(len(img), len(img_metas))
-        # print(img_metas)
-        img_metas = img_metas[0]
+        assert img.size(0) == len(img_metas)
+        test_scale_factor = img_metas[0]['test_scale_factor']
+        base_size = img_metas[0]['base_size']
+        center = img_metas[0]['center']
+        scale = img_metas[0]['scale']
+        flip_index = img_metas[0]['flip_index']
 
-        aug_data = img_metas['aug_data']
+        aug_data = []
+        for i in range(len(test_scale_factor)):
+            aug_data.append(torch.empty((img.size(0), img.size(-1), img.size(1), img.size(2))))
+            for j in range(len(img_metas)):
+                aug_data[i][j] = img_metas[j]['aug_data'][i]
 
-        test_scale_factor = img_metas['test_scale_factor']
-        base_size = img_metas['base_size']
-        center = img_metas['center']
-        scale = img_metas['scale']
-
-        result = {}
-
+        
         aggregated_heatmaps = None
         tags_list = []
         for idx, s in enumerate(sorted(test_scale_factor, reverse=True)):
@@ -253,7 +252,7 @@ class AssociativeEmbedding(BasePose):
                 self.test_cfg['with_heatmaps'],
                 self.test_cfg['with_ae'],
                 self.test_cfg['tag_per_joint'],
-                img_metas['flip_index'],
+                flip_index,
                 self.test_cfg['project2image'],
                 base_size,
                 align_corners=self.use_udp)
@@ -268,38 +267,44 @@ class AssociativeEmbedding(BasePose):
                 self.test_cfg['project2image'],
                 self.test_cfg.get('flip_test', True),
                 align_corners=self.use_udp)
-
+        
         # average heatmaps of different scales
         aggregated_heatmaps = aggregated_heatmaps / float(
             len(test_scale_factor))
         tags = torch.cat(tags_list, dim=4)
 
-        # perform grouping
-        grouped, scores = self.parser.parse(aggregated_heatmaps, tags,
-                                            self.test_cfg['adjust'],
-                                            self.test_cfg['refine'])
+        results = []
+        for i in range(len(img_metas)):
+            result = {}
+            
+            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0)
+            _tags = torch.unsqueeze(tags[i], 0)
+            # perform grouping
+            grouped, scores = self.parser.parse(_aggregated_heatmaps, _tags,
+                                                self.test_cfg['adjust'],
+                                                self.test_cfg['refine'])
 
-        preds = get_group_preds(
-            grouped,
-            center,
-            scale, [aggregated_heatmaps.size(3),
-                    aggregated_heatmaps.size(2)],
-            use_udp=self.use_udp)
+            preds = get_group_preds(
+                grouped,
+                center,
+                scale, [_aggregated_heatmaps.size(3),
+                        _aggregated_heatmaps.size(2)],
+                use_udp=self.use_udp)
+            image_paths = []
+            image_paths.append(img_metas[i]['image_file'])
 
-        image_paths = []
-        image_paths.append(img_metas['image_file'])
+            if return_heatmap:
+                output_heatmap = _aggregated_heatmaps.detach().cpu().numpy()
+            else:
+                output_heatmap = None
 
-        if return_heatmap:
-            output_heatmap = aggregated_heatmaps.detach().cpu().numpy()
-        else:
-            output_heatmap = None
+            result['preds'] = preds
+            result['scores'] = scores
+            result['image_paths'] = image_paths
+            result['output_heatmap'] = output_heatmap
+            results.append(result)
 
-        result['preds'] = preds
-        result['scores'] = scores
-        result['image_paths'] = image_paths
-        result['output_heatmap'] = output_heatmap
-
-        return result
+        return results
 
     @deprecated_api_warning({'pose_limb_color': 'pose_link_color'},
                             cls_name='AssociativeEmbedding')
