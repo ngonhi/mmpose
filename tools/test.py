@@ -133,7 +133,7 @@ def main():
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        outputs = single_gpu_test(model, data_loader)
+        outputs = single_gpu_test(model, data_loader, type='bottom_up')
     else:
         model = MMDistributedDataParallel(
             model.cuda(),

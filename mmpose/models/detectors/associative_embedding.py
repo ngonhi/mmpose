@@ -213,9 +213,10 @@ class AssociativeEmbedding(BasePose):
             center (np.ndarray): center of image
             scale (np.ndarray): the scale of image
         """
-        assert img.size(0) == 1
-        assert len(img_metas) == 1
-
+        # assert img.size(0) == 1
+        # assert len(img_metas) == 1
+        # print(len(img), len(img_metas))
+        # print(img_metas)
         img_metas = img_metas[0]
 
         aug_data = img_metas['aug_data']

@@ -21,7 +21,7 @@ lr_config = dict(
     step=[200, 260])
 total_epochs = 5
 log_config = dict(
-    interval=1,
+    interval=50, # every 50 steps
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
@@ -127,12 +127,12 @@ model = dict(
 
 train_pipeline = [
     dict(type='LoadImageFromFile'),
-    # dict(
-    #     type='BottomUpRandomAffine',
-    #     rot_factor=30,
-    #     scale_factor=[0.75, 1.5],
-    #     scale_type='short',
-    #     trans_factor=40),
+    dict(
+        type='BottomUpRandomAffine',
+        rot_factor=0,
+        scale_factor=[1.0, 1.0],
+        scale_type='short',
+        trans_factor=0),
     # dict(type='BottomUpRandomFlip', flip_prob=0.5),
     dict(type='ToTensor'),
     dict(
@@ -152,6 +152,12 @@ train_pipeline = [
 
 val_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(
+        type='BottomUpRandomAffine',
+        rot_factor=0,
+        scale_factor=[1.0, 1.0],
+        scale_type='short',
+        trans_factor=0),
     dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
     dict(
         type='BottomUpResizeAlign',
@@ -173,10 +179,12 @@ val_pipeline = [
 
 test_pipeline = val_pipeline
 
-data_root = '/root/ID_card/ID_card_data'
+data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=16,
     workers_per_gpu=1,
+    val_dataloader=dict(samples_per_gpu=16),
+    test_dataloader=dict(samples_per_gpu=1),
     train=dict(
         type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/train_annotations.json',
