@@ -527,21 +527,21 @@ def inference_bottom_up_pose_model(model,
                 return_heatmap=return_heatmap)
 
         if return_heatmap:
-            h.layer_outputs['heatmap'] = result['output_heatmap']
+            h.layer_outputs['heatmap'] = result[0]['output_heatmap']
 
         returned_outputs.append(h.layer_outputs)
 
-        for idx, pred in enumerate(result['preds']):
+        for idx, pred in enumerate(result[0]['preds']):
             area = (np.max(pred[:, 0]) - np.min(pred[:, 0])) * (
                 np.max(pred[:, 1]) - np.min(pred[:, 1]))
             pose_results.append({
                 'keypoints': pred[:, :3],
-                'score': result['scores'][idx],
+                'score': result[0]['scores'][idx],
                 'area': area,
             })
 
         # pose nms
-        keep = oks_nms(pose_results, pose_nms_thr, sigmas=None)
+        keep = oks_nms(pose_results, pose_nms_thr, sigmas=cfg.dataset_info.sigmas)
         pose_results = [pose_results[_keep] for _keep in keep]
 
     return pose_results, returned_outputs
@@ -590,8 +590,12 @@ def vis_pose_result(model,
                             [255, 51, 51], [153, 255, 153], [102, 255, 102],
                             [51, 255, 51], [0, 255, 0], [0, 0, 255],
                             [255, 0, 0], [255, 255, 255]])
-
-        if dataset in ('TopDownCocoDataset', 'BottomUpCocoDataset',
+        if dataset == 'BottomUpIDCardDataset':
+            #show the results
+            skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
+            pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
+            pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
+        elif dataset in ('TopDownCocoDataset', 'BottomUpCocoDataset',
                        'TopDownOCHumanDataset', 'AnimalMacaqueDataset'):
             # show the results
             skeleton = [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12],
