@@ -1,12 +1,12 @@
 _base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
-resume_from = None
+resume_from = '/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
 dist_params = dict(backend='nccl')
 workflow = [('train', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-
+work_dir = './work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -184,7 +184,7 @@ data = dict(
     samples_per_gpu=16,
     workers_per_gpu=1,
     val_dataloader=dict(samples_per_gpu=16),
-    test_dataloader=dict(samples_per_gpu=1),
+    test_dataloader=dict(samples_per_gpu=16),
     train=dict(
         type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/train_annotations.json',
