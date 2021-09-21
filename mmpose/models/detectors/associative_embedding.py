@@ -1,6 +1,8 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import warnings
 
+import numpy as np
+
 import mmcv
 import torch
 from mmcv.image import imwrite
@@ -125,14 +127,13 @@ class AssociativeEmbedding(BasePose):
               Otherwise, return predicted poses, scores, image
               paths and heatmaps.
         """
-
         if return_loss:
-            return self.forward_train(img, targets, masks, joints, img_metas,
+            return self.forward_train(img, targets, masks, joints, img_metas, return_heatmap=return_heatmap,
                                       **kwargs)
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
 
-    def forward_train(self, img, targets, masks, joints, img_metas, **kwargs):
+    def forward_train(self, img, targets, masks, joints, img_metas, return_heatmap, **kwargs):
         """Forward the bottom-up model and calculate the loss.
 
         Note:
@@ -165,7 +166,6 @@ class AssociativeEmbedding(BasePose):
         Returns:
             dict: The total loss for bottom-up
         """
-
         output = self.backbone(img)
 
         if self.with_keypoint:
@@ -219,25 +219,53 @@ class AssociativeEmbedding(BasePose):
         center = img_metas[0]['center']
         scale = img_metas[0]['scale']
         flip_index = img_metas[0]['flip_index']
+        num_scales = img_metas[0]['num_scales']
+        max_num_people = img_metas[0]['max_num_people']
+        num_joints = img_metas[0]['num_joints']
 
         aug_h = img_metas[0]['aug_data'][0].size(3)
         aug_w = img_metas[0]['aug_data'][0].size(2)
         aug_data = []
+
+        aug_mask = np.empty((len(test_scale_factor), num_scales)).tolist()
+        aug_joints = np.empty((len(test_scale_factor), num_scales)).tolist()
+        aug_targets = np.empty((len(test_scale_factor), num_scales)).tolist()
+        for i in range(len(test_scale_factor)):
+            for j in range(num_scales):
+                mask_h = img_metas[0]['aug_mask'][i][j].shape[0]
+                mask_w = img_metas[0]['aug_mask'][i][j].shape[1]
+                aug_mask[i][j] = torch.empty((len(img_metas), mask_h, mask_w))
+                aug_joints[i][j] = torch.empty((len(img_metas), max_num_people, num_joints, 2), dtype=torch.int32)
+                aug_targets[i][j] = torch.empty((len(img_metas), num_joints, mask_h, mask_w))
         for i in range(len(test_scale_factor)):
             aug_data.append(torch.empty((img.size(0),img.size(-1), aug_w, aug_h)))
             for j in range(len(img_metas)):
                 aug_data[i][j] = img_metas[j]['aug_data'][i]
-
-        
+                for k in range(num_scales):
+                    aug_mask[i][k][j] = torch.from_numpy(img_metas[j]['aug_mask'][i][k])
+                    aug_joints[i][k][j] = torch.from_numpy(img_metas[j]['aug_joints'][i][k])
+                    aug_targets[i][k][j] = torch.from_numpy(img_metas[j]['aug_targets'][i][k])
         aggregated_heatmaps = None
         tags_list = []
+        losses = {}
         for idx, s in enumerate(sorted(test_scale_factor, reverse=True)):
             image_resized = aug_data[idx].to(img.device)
-
+            masks = [mask.to(img.device) for mask in aug_mask[idx]]
+            joints = [joint.to(img.device) for joint in aug_joints[idx]]
+            targets = [target.to(img.device) for target in aug_targets[idx]]
             features = self.backbone(image_resized)
             if self.with_keypoint:
                 outputs = self.keypoint_head(features)
 
+            if self.with_keypoint:
+                keypoint_losses = self.keypoint_head.get_loss(
+                    outputs, targets, masks, joints)
+                if idx == 0:
+                    losses.update(keypoint_losses)
+                else:
+                    for k, v in keypoint_losses.items():
+                        losses[k] += v
+            
             if self.test_cfg.get('flip_test', True):
                 # use flip test
                 features_flipped = self.backbone(
@@ -306,7 +334,7 @@ class AssociativeEmbedding(BasePose):
             result['output_heatmap'] = output_heatmap
             results.append(result)
 
-        return results
+        return results, losses
 
     @deprecated_api_warning({'pose_limb_color': 'pose_link_color'},
                             cls_name='AssociativeEmbedding')

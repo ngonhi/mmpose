@@ -69,7 +69,8 @@ def _get_multi_scale_size(image,
     return (w_resized, h_resized), center, np.array([scale_w, scale_h])
 
 
-def _resize_align_multi_scale(image, input_size, current_scale, min_scale):
+def _resize_align_multi_scale(image, input_size, current_scale, min_scale,
+                                heatmap_size, masks, joints):
     """Resize the images for multi-scale training.
 
     Args:
@@ -77,6 +78,9 @@ def _resize_align_multi_scale(image, input_size, current_scale, min_scale):
         input_size (int): Size of the image input
         current_scale (float): Current scale
         min_scale (float): Minimal scale
+        heatmap_size (int): Size of heatmap
+        masks (list): List of masks
+        joints (list): List of joints
 
     Returns:
         tuple: A tuple containing image info.
@@ -91,10 +95,26 @@ def _resize_align_multi_scale(image, input_size, current_scale, min_scale):
     trans = get_affine_transform(center, scale, 0, size_resized)
     image_resized = cv2.warpAffine(image, trans, size_resized)
 
-    return image_resized, center, scale
+    # resize masks and joints
+    for i, _heatmap_size in enumerate(heatmap_size):
+        mask_trans = get_affine_transform(
+            center,
+            scale,
+            0,
+            (int(_heatmap_size), int(_heatmap_size))) 
+        masks[i] = cv2.warpAffine(
+            (masks[i].copy() * 255).astype(np.uint8),
+            mask_trans, (int(_heatmap_size), int(_heatmap_size)),
+            flags=cv2.INTER_LINEAR) / 255
+        masks[i] = (masks[i] > 0.5).astype(np.float32)
+        joints[i][:, :, 0:2] = \
+            warp_affine_joints(joints[i][:, :, 0:2].copy(), mask_trans)
+
+    return image_resized, masks, joints, center, scale
 
 
-def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
+def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale,
+                                    heatmap_size, masks, joints):
     """Resize the images for multi-scale training.
 
     Args:
@@ -102,6 +122,9 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
         input_size (int): Size of the image input
         current_scale (float): Current scale
         min_scale (float): Minimal scale
+        heatmap_size (int): Size of heatmap
+        masks (list): List of masks
+        joints (list): List of joints
 
     Returns:
         tuple: A tuple containing image info.
@@ -115,7 +138,7 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
 
     _, center, scale = _get_multi_scale_size(image, input_size, min_scale,
                                              min_scale, True)
-
+    # resize image
     trans = get_warp_matrix(
         theta=0,
         size_input=np.array(scale, dtype=np.float32),
@@ -124,7 +147,22 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
     image_resized = cv2.warpAffine(
         image.copy(), trans, size_resized, flags=cv2.INTER_LINEAR)
 
-    return image_resized, center, scale
+    # resize masks and joints
+    for i, _heatmap_size in enumerate(heatmap_size):
+        mask_trans = get_warp_matrix(
+            theta=0,
+            size_input=np.array(scale, dtype=np.float32),
+            size_dst=np.array((_heatmap_size, _heatmap_size), dtype=np.float32) - 1.0,
+            size_target=np.array(scale, dtype=np.float32)) 
+        masks[i] = cv2.warpAffine(
+            (masks[i].copy() * 255).astype(np.uint8),
+            mask_trans, (int(_heatmap_size), int(_heatmap_size)),
+            flags=cv2.INTER_LINEAR) / 255
+        masks[i] = (masks[i] > 0.5).astype(np.float32)
+        joints[i][:, :, 0:2] = \
+            warp_affine_joints(joints[i][:, :, 0:2].copy(), mask_trans)
+
+    return image_resized, masks, joints, center, scale
 
 
 class HeatmapGenerator:
@@ -601,6 +639,62 @@ class BottomUpGenerateTarget:
 
 
 @PIPELINES.register_module()
+class BottomUpGenerateTestTarget:
+    """Generate multi-scale heatmap target for bottom-up for testing
+
+    Args:
+        sigma (int): Sigma of heatmap Gaussian
+        max_num_people (int): Maximum number of people in an image
+        use_udp (bool): To use unbiased data processing.
+            Paper ref: Huang et al. The Devil is in the Details: Delving into
+            Unbiased Data Processing for Human Pose Estimation (CVPR 2020).
+    """
+
+    def __init__(self, sigma, max_num_people, use_udp=False):
+        self.sigma = sigma
+        self.max_num_people = max_num_people
+        self.use_udp = use_udp
+
+    def _generate(self, num_joints, heatmap_size):
+        """Get heatmap generator and joint encoder."""
+        heatmap_generator = [
+            HeatmapGenerator(output_size, num_joints, self.sigma, self.use_udp)
+            for output_size in heatmap_size
+        ]
+        joints_encoder = [
+            JointsEncoder(self.max_num_people, num_joints, output_size, True)
+            for output_size in heatmap_size
+        ]
+        return heatmap_generator, joints_encoder
+
+    def __call__(self, results):
+        """Generate multi-scale heatmap target for bottom-up."""
+        heatmap_generator, joints_encoder = \
+            self._generate(results['ann_info']['num_joints'],
+                           results['ann_info']['heatmap_size'])
+        
+        results['ann_info']['max_num_people'] = self.max_num_people
+        results['ann_info']['aug_targets'] = []
+        for i, _ in enumerate(results['ann_info']['test_scale_factor']):
+            mask_list, joints_list = results['ann_info']['aug_mask'][i], \
+                                        results['ann_info']['aug_joints'][i]
+            target_list = list()
+            for scale_id in range(results['ann_info']['num_scales']):
+                target_t = heatmap_generator[scale_id](joints_list[scale_id])
+                joints_t = joints_encoder[scale_id](joints_list[scale_id])
+
+                target_list.append(target_t.astype(np.float32))
+                mask_list[scale_id] = mask_list[scale_id].astype(np.float32)
+                joints_list[scale_id] = joints_t.astype(np.int32)
+            
+            results['ann_info']['aug_mask'][i] = mask_list
+            results['ann_info']['aug_joints'][i] = joints_list
+            results['ann_info']['aug_targets'].append(target_list)
+
+        return results
+
+
+@PIPELINES.register_module()
 class BottomUpGeneratePAFTarget:
     """Generate multi-scale heatmaps and part affinity fields (PAF) target for
     bottom-up. Paper ref: Cao et al. Realtime Multi-Person 2D Human Pose
@@ -734,16 +828,22 @@ class BottomUpResizeAlign:
         input_size = results['ann_info']['image_size']
         test_scale_factor = results['ann_info']['test_scale_factor']
         aug_data = []
-
+        aug_mask = []
+        aug_joints = []
         for _, s in enumerate(sorted(test_scale_factor, reverse=True)):
             _results = results.copy()
-            image_resized, _, _ = self._resize_align_multi_scale(
-                _results['img'], input_size, s, min(test_scale_factor))
+            image_resized, masks, joints, _, _ = self._resize_align_multi_scale(
+                _results['img'], input_size, s, min(test_scale_factor),
+                _results['ann_info']['heatmap_size'], _results['mask'], _results['joints'])
             _results['img'] = image_resized
             _results = self.transforms(_results)
             transformed_img = _results['img'].unsqueeze(0)
             aug_data.append(transformed_img)
+            aug_mask.append(masks)
+            aug_joints.append(joints)
 
+        results['ann_info']['aug_mask'] = aug_mask
+        results['ann_info']['aug_joints'] = aug_joints
         results['ann_info']['aug_data'] = aug_data
 
         return results
