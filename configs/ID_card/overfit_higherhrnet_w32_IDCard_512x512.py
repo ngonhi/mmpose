@@ -3,10 +3,10 @@ log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
 resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
 dist_params = dict(backend='nccl')
-workflow = [('train', 1), ('val', 1)]
-checkpoint_config = dict(interval=1)
+workflow = [('train', 100), ('val', 50)]
+checkpoint_config = dict(interval=100)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/test'
+work_dir = './work_dirs/iter_run'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -19,13 +19,16 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=0.001,
     step=[200, 260])
-total_epochs = 5
+
 log_config = dict(
     interval=50, # every 50 steps
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
+total_epochs = 5
+# runner = dict(type='EpochBasedRunner', max_epochs=200)
+runner = dict(type='IterBasedRunner', max_iters=320000)
 
 channel_cfg = dict(
     dataset_joints=4,
@@ -197,10 +200,10 @@ test_pipeline = val_pipeline
 
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=1,
     workers_per_gpu=1,
-    val_dataloader=dict(samples_per_gpu=16),
-    test_dataloader=dict(samples_per_gpu=16),
+    val_dataloader=dict(samples_per_gpu=1),
+    test_dataloader=dict(samples_per_gpu=1),
     train=dict(
         type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/train_annotations.json',
