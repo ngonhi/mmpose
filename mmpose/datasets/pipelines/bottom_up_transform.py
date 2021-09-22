@@ -96,7 +96,8 @@ def _resize_align_multi_scale(image, input_size, current_scale, min_scale,
 
     trans = get_affine_transform(center, scale, 0, size_resized)
     image_resized = cv2.warpAffine(image, trans, size_resized)
-
+    masks = masks.copy()
+    joints = joints.copy()
     # resize masks and joints
     for i, _heatmap_size in enumerate(heatmap_size):
         mask_trans = get_affine_transform(
@@ -149,6 +150,8 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale,
     image_resized = cv2.warpAffine(
         image.copy(), trans, size_resized, flags=cv2.INTER_LINEAR)
 
+    masks = masks.copy()
+    joints = joints.copy()
     # resize masks and joints
     for i, _heatmap_size in enumerate(heatmap_size):
         mask_trans = get_warp_matrix(

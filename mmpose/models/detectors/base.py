@@ -125,9 +125,9 @@ class BasePose(nn.Module, metaclass=ABCMeta):
 
         loss, log_vars = self._parse_losses(losses)
 
-        # results = self.forward(return_loss=False, **data_batch)
+        results = self.forward(return_loss=False, **data_batch)
 
-        outputs = dict(results=[], 
+        outputs = dict(results=results, 
                         loss=loss, 
                         log_vars=log_vars,
                         num_samples=len(next(iter(data_batch.values()))))
