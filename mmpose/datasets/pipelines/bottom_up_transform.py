@@ -5,7 +5,9 @@ import numpy as np
 from mmpose.core.post_processing import (get_affine_transform, get_warp_matrix,
                                          warp_affine_joints)
 from mmpose.datasets.builder import PIPELINES
+from numpy.lib.type_check import imag
 from .shared_transform import Compose
+from torchvision.transforms import functional as F
 
 
 def _ceil_to_multiples_of(x, base=64):
@@ -465,7 +467,6 @@ class BottomUpRandomAffine:
         assert len(mask) == len(self.output_size), (len(mask),
                                                     len(self.output_size),
                                                     self.output_size)
-
         height, width = image.shape[:2]
         if self.use_udp:
             center = np.array(((width - 1.0) / 2, (height - 1.0) / 2))
@@ -538,10 +539,8 @@ class BottomUpRandomAffine:
                                                  self.input_size), aug_rot)[:2]
             image = cv2.warpAffine(image, mat_input, (self.input_size.item(),
                                                       self.input_size.item()))
-
         results['img'], results['mask'], results[
             'joints'] = image, mask, joints
-
         return results
 
 
@@ -622,7 +621,6 @@ class BottomUpGenerateTarget:
         target_list = list()
         img, mask_list, joints_list = results['img'], results['mask'], results[
             'joints']
-
         for scale_id in range(results['ann_info']['num_scales']):
             target_t = heatmap_generator[scale_id](joints_list[scale_id])
             joints_t = joints_encoder[scale_id](joints_list[scale_id])
@@ -630,11 +628,9 @@ class BottomUpGenerateTarget:
             target_list.append(target_t.astype(np.float32))
             mask_list[scale_id] = mask_list[scale_id].astype(np.float32)
             joints_list[scale_id] = joints_t.astype(np.int32)
-
         results['img'], results['masks'], results[
             'joints'] = img, mask_list, joints_list
         results['targets'] = target_list
-
         return results
 
 
@@ -690,7 +686,6 @@ class BottomUpGenerateTestTarget:
             results['ann_info']['aug_mask'][i] = mask_list
             results['ann_info']['aug_joints'][i] = joints_list
             results['ann_info']['aug_targets'].append(target_list)
-
         return results
 
 

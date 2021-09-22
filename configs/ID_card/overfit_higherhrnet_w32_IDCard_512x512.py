@@ -1,12 +1,12 @@
 _base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
-resume_from = '/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
+resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
 dist_params = dict(backend='nccl')
-workflow = [('train', 1)]
+workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1'
+work_dir = './work_dirs/test'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -168,12 +168,28 @@ val_pipeline = [
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]),
         ]),
+    dict(type='ToTensor'),
+    dict(
+        type='NormalizeTensor',
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]),
+    dict(
+        type='BottomUpGenerateTestTarget',
+        sigma=2,
+        max_num_people=5,
+    ),
+    dict(
+        type='BottomUpGenerateTarget',
+        sigma=2,
+        max_num_people=5,
+    ),
     dict(
         type='Collect',
-        keys=['img'],
+        keys=['img', 'joints', 'targets', 'masks'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index'
+            'center', 'scale', 'flip_index', 'aug_mask', 'aug_joints', 
+            'aug_targets', 'num_scales', 'num_joints', 'max_num_people'
         ]),
 ]
 
@@ -187,15 +203,15 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=16),
     train=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/train_annotations.json',
-        img_prefix=f'{data_root}/train/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
     val=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/val_annotations.json',
-        img_prefix=f'{data_root}/val/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),

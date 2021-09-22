@@ -119,9 +119,18 @@ class BasePose(nn.Module, metaclass=ABCMeta):
         during val epochs. Note that the evaluation after training epochs is
         not implemented with this method, but an evaluation hook.
         """
-        results = self.forward(return_loss=False, **data_batch)
+        # Calculate loss
+        with torch.no_grad():
+            losses = self.forward(return_loss=True, **data_batch)
 
-        outputs = dict(results=results)
+        loss, log_vars = self._parse_losses(losses)
+
+        # results = self.forward(return_loss=False, **data_batch)
+
+        outputs = dict(results=[], 
+                        loss=loss, 
+                        log_vars=log_vars,
+                        num_samples=len(next(iter(data_batch.values()))))
 
         return outputs
 

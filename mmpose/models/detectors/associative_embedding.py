@@ -177,7 +177,6 @@ class AssociativeEmbedding(BasePose):
             keypoint_losses = self.keypoint_head.get_loss(
                 output, targets, masks, joints)
             losses.update(keypoint_losses)
-
         return losses
 
     def forward_dummy(self, img):
@@ -226,7 +225,6 @@ class AssociativeEmbedding(BasePose):
         aug_h = img_metas[0]['aug_data'][0].size(3)
         aug_w = img_metas[0]['aug_data'][0].size(2)
         aug_data = []
-
         aug_mask = np.empty((len(test_scale_factor), num_scales)).tolist()
         aug_joints = np.empty((len(test_scale_factor), num_scales)).tolist()
         aug_targets = np.empty((len(test_scale_factor), num_scales)).tolist()
@@ -238,7 +236,7 @@ class AssociativeEmbedding(BasePose):
                 aug_joints[i][j] = torch.empty((len(img_metas), max_num_people, num_joints, 2), dtype=torch.int32)
                 aug_targets[i][j] = torch.empty((len(img_metas), num_joints, mask_h, mask_w))
         for i in range(len(test_scale_factor)):
-            aug_data.append(torch.empty((img.size(0),img.size(-1), aug_w, aug_h)))
+            aug_data.append(torch.empty((img.size(0),img.size(1), aug_w, aug_h)))
             for j in range(len(img_metas)):
                 aug_data[i][j] = img_metas[j]['aug_data'][i]
                 for k in range(num_scales):
@@ -334,7 +332,7 @@ class AssociativeEmbedding(BasePose):
             result['output_heatmap'] = output_heatmap
             results.append(result)
 
-        return results, losses
+        return results
 
     @deprecated_api_warning({'pose_limb_color': 'pose_link_color'},
                             cls_name='AssociativeEmbedding')
