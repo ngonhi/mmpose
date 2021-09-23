@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from re import S
 import torch
 import torch.nn as nn
 from mmcv.cnn import (build_conv_layer, build_upsample_layer, constant_init,
@@ -192,31 +193,36 @@ class AEHigherResolutionHead(nn.Module):
         """
 
         losses = dict()
+        sum_loss = torch.zeros((len(targets),targets[0].size(0)), device=targets[0].device)
 
         heatmaps_losses, push_losses, pull_losses = self.loss(
             output, targets, masks, joints)
-
         for idx in range(len(targets)):
+            sum = torch.zeros(output[0].size(0), device=output[0].device)
             if heatmaps_losses[idx] is not None:
+                sum += heatmaps_losses[idx]
                 heatmaps_loss = heatmaps_losses[idx].mean(dim=0)
                 if 'heatmap_loss' not in losses:
                     losses['heatmap_loss'] = heatmaps_loss
                 else:
                     losses['heatmap_loss'] += heatmaps_loss
             if push_losses[idx] is not None:
+                sum += push_losses[idx]
                 push_loss = push_losses[idx].mean(dim=0)
                 if 'push_loss' not in losses:
                     losses['push_loss'] = push_loss
                 else:
                     losses['push_loss'] += push_loss
             if pull_losses[idx] is not None:
+                sum += pull_losses[idx]
                 pull_loss = pull_losses[idx].mean(dim=0)
                 if 'pull_loss' not in losses:
                     losses['pull_loss'] = pull_loss
                 else:
                     losses['pull_loss'] += pull_loss
-
-        return losses
+            sum_loss[idx] = sum
+        
+        return losses, sum_loss.sum(dim=0)
 
     def forward(self, x):
         """Forward function."""

@@ -132,6 +132,67 @@ class AssociativeEmbedding(BasePose):
                                       **kwargs)
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
+    
+    def _get_results(self, outputs, img_metas):
+        scale = img_metas[0]['test_scale_factor'][0]
+        test_scale_factor = img_metas[0]['test_scale_factor']
+        aggregated_heatmaps = None
+        tags_list = []
+
+        _, heatmaps, tags = get_multi_stage_outputs(
+            outputs=outputs,
+            num_joints=self.test_cfg['num_joints'],
+            with_heatmaps=self.test_cfg['with_heatmaps'],
+            with_ae=self.test_cfg['with_ae'],
+            tag_per_joint=self.test_cfg['tag_per_joint'],    
+            project2image=self.test_cfg['project2image'],
+            size_projected=img_metas[0]['base_size'],
+            outputs_flip=None,
+            flip_index=None,
+            align_corners=self.use_udp)
+
+        aggregated_heatmaps, tags_list = aggregate_results(
+            scale=scale,
+            aggregated_heatmaps=aggregated_heatmaps,
+            tags_list=tags_list,
+            heatmaps=heatmaps,
+            tags=tags,
+            test_scale_factor=test_scale_factor,
+            project2image=self.test_cfg['project2image'],
+            flip_test=False,
+            align_corners=self.use_udp)
+        tags = torch.cat(tags_list, dim=4)
+
+        results = []
+        for i in range(len(img_metas)):
+            result = {}
+            
+            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0)
+            _tags = torch.unsqueeze(tags[i], 0)
+            # perform grouping
+            grouped, scores = self.parser.parse(_aggregated_heatmaps.detach(),
+                                                _tags.detach(),
+                                                self.test_cfg['adjust'],
+                                                self.test_cfg['refine'])
+
+            preds = get_group_preds(
+                grouped,
+                img_metas[i]['center'],
+                img_metas[i]['scale'], [_aggregated_heatmaps.size(3),
+                        _aggregated_heatmaps.size(2)],
+                use_udp=self.use_udp)
+            image_paths = []
+            image_paths.append(img_metas[i]['image_file'])
+
+            output_heatmap = _aggregated_heatmaps.detach().cpu().numpy()
+
+            result['preds'] = preds
+            result['scores'] = scores
+            result['image_paths'] = image_paths
+            result['output_heatmap'] = output_heatmap
+            results.append(result)
+        
+        return results
 
     def forward_train(self, img, targets, masks, joints, img_metas, return_heatmap, **kwargs):
         """Forward the bottom-up model and calculate the loss.
@@ -167,17 +228,29 @@ class AssociativeEmbedding(BasePose):
             dict: The total loss for bottom-up
         """
         output = self.backbone(img)
-
         if self.with_keypoint:
             output = self.keypoint_head(output)
 
         # if return loss
         losses = dict()
         if self.with_keypoint:
-            keypoint_losses = self.keypoint_head.get_loss(
+            keypoint_losses, sum_loss = self.keypoint_head.get_loss(
                 output, targets, masks, joints)
             losses.update(keypoint_losses)
-        return losses
+    
+        # Calculate metrics
+    
+        # Get top k loss
+        batch_size = img.size(0)
+        k = self.train_cfg['topk'] if self.train_cfg['topk'] < batch_size else 1
+        topk_loss = torch.topk(sum_loss, k, sorted=True)
+        topk_loss_value = topk_loss.values.tolist()
+        topk_loss_index = topk_loss.indices.tolist()
+        
+        topk_img_metas = [img_metas[i] for i in topk_loss_index]
+        topk_results = self._get_results(output, topk_img_metas)
+
+        return losses, topk_loss_value, topk_results
 
     def forward_dummy(self, img):
         """Used for computing network FLOPs.
@@ -218,52 +291,21 @@ class AssociativeEmbedding(BasePose):
         center = img_metas[0]['center']
         scale = img_metas[0]['scale']
         flip_index = img_metas[0]['flip_index']
-        num_scales = img_metas[0]['num_scales']
-        max_num_people = img_metas[0]['max_num_people']
-        num_joints = img_metas[0]['num_joints']
 
         aug_h = img_metas[0]['aug_data'][0].size(3)
         aug_w = img_metas[0]['aug_data'][0].size(2)
         aug_data = []
-        aug_mask = np.empty((len(test_scale_factor), num_scales)).tolist()
-        aug_joints = np.empty((len(test_scale_factor), num_scales)).tolist()
-        aug_targets = np.empty((len(test_scale_factor), num_scales)).tolist()
-        for i in range(len(test_scale_factor)):
-            for j in range(num_scales):
-                mask_h = img_metas[0]['aug_mask'][i][j].shape[0]
-                mask_w = img_metas[0]['aug_mask'][i][j].shape[1]
-                aug_mask[i][j] = torch.empty((len(img_metas), mask_h, mask_w))
-                aug_joints[i][j] = torch.empty((len(img_metas), max_num_people, num_joints, 2), dtype=torch.int32)
-                aug_targets[i][j] = torch.empty((len(img_metas), num_joints, mask_h, mask_w))
         for i in range(len(test_scale_factor)):
             aug_data.append(torch.empty((img.size(0),img.size(1), aug_w, aug_h)))
             for j in range(len(img_metas)):
                 aug_data[i][j] = img_metas[j]['aug_data'][i]
-                for k in range(num_scales):
-                    aug_mask[i][k][j] = torch.from_numpy(img_metas[j]['aug_mask'][i][k])
-                    aug_joints[i][k][j] = torch.from_numpy(img_metas[j]['aug_joints'][i][k])
-                    aug_targets[i][k][j] = torch.from_numpy(img_metas[j]['aug_targets'][i][k])
         aggregated_heatmaps = None
         tags_list = []
-        losses = {}
         for idx, s in enumerate(sorted(test_scale_factor, reverse=True)):
             image_resized = aug_data[idx].to(img.device)
-            masks = [mask.to(img.device) for mask in aug_mask[idx]]
-            joints = [joint.to(img.device) for joint in aug_joints[idx]]
-            targets = [target.to(img.device) for target in aug_targets[idx]]
             features = self.backbone(image_resized)
             if self.with_keypoint:
                 outputs = self.keypoint_head(features)
-
-            if self.with_keypoint:
-                keypoint_losses = self.keypoint_head.get_loss(
-                    outputs, targets, masks, joints)
-                if idx == 0:
-                    losses.update(keypoint_losses)
-                else:
-                    for k, v in keypoint_losses.items():
-                        losses[k] += v
-            
             if self.test_cfg.get('flip_test', True):
                 # use flip test
                 features_flipped = self.backbone(

@@ -18,7 +18,7 @@ from mmpose.models import build_posenet
 from mmpose.utils import collect_env, get_root_logger
 
 # from clearml import Task
-# task = Task.init(project_name='ID card crop and alignment', task_name='higherhrnet_overfit_test_evaluate_batch>1')
+# task = Task.init(project_name='ID card crop and alignment', task_name='test_IterBasedRunner')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a pose model')
@@ -163,7 +163,7 @@ def main():
         datasets,
         cfg,
         distributed=distributed,
-        validate=(not args.no_validate),
+        validate=(not args.no_validate), #True
         timestamp=timestamp,
         meta=meta)
 

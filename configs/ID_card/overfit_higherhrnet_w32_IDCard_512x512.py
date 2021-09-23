@@ -3,7 +3,7 @@ log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
 resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
 dist_params = dict(backend='nccl')
-workflow = [('train', 100), ('val', 50)]
+workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=100)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
 work_dir = './work_dirs/iter_run'
@@ -21,14 +21,14 @@ lr_config = dict(
     step=[200, 260])
 
 log_config = dict(
-    interval=50, # every 50 steps
+    interval=1, 
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
 total_epochs = 5
-# runner = dict(type='EpochBasedRunner', max_epochs=200)
-runner = dict(type='IterBasedRunner', max_iters=320000)
+runner = dict(type='EpochBasedRunner', max_epochs=200)
+# runner = dict(type='IterBasedRunner', max_iters=3000)
 
 channel_cfg = dict(
     dataset_joints=4,
@@ -109,7 +109,9 @@ model = dict(
             heatmaps_loss_factor=[1.0, 1.0])),
     train_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
-        img_size=data_cfg['image_size']),
+        img_size=data_cfg['image_size'],
+        topk=3,
+        base_size=data_cfg['base_size']),
     test_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
         max_num_people=5,
@@ -137,6 +139,7 @@ train_pipeline = [
         scale_type='short',
         trans_factor=0),
     # dict(type='BottomUpRandomFlip', flip_prob=0.5),
+    dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
     dict(type='ToTensor'),
     dict(
         type='NormalizeTensor',
@@ -150,7 +153,7 @@ train_pipeline = [
     dict(
         type='Collect',
         keys=['img', 'joints', 'targets', 'masks'],
-        meta_keys=[]),
+        meta_keys=['image_file', 'center', 'scale', 'test_scale_factor', 'base_size']),
 ]
 
 val_pipeline = [
@@ -200,21 +203,21 @@ test_pipeline = val_pipeline
 
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=16,
     workers_per_gpu=1,
-    val_dataloader=dict(samples_per_gpu=1),
-    test_dataloader=dict(samples_per_gpu=1),
+    val_dataloader=dict(samples_per_gpu=16),
+    test_dataloader=dict(samples_per_gpu=16),
     train=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/train_annotations.json',
-        img_prefix=f'{data_root}/train/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
     val=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/val_annotations.json',
-        img_prefix=f'{data_root}/val/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),
