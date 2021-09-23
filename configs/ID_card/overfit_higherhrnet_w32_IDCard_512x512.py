@@ -193,14 +193,51 @@ val_pipeline = [
         ]),
 ]
 
-test_pipeline = val_pipeline
+test_pipeline = val_pipeline = [
+    dict(type='LoadImageFromFile'),
+    # dict(
+    #     type='BottomUpRandomAffine',
+    #     rot_factor=0,
+    #     scale_factor=[1.0, 1.0],
+    #     scale_type='short',
+    #     trans_factor=0),
+    dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
+    dict(
+        type='BottomUpResizeAlign',
+        transforms=[
+            dict(type='ToTensor'),
+            dict(
+                type='NormalizeTensor',
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+        ]),
+    # dict(type='ToTensor'), #required
+    # dict(
+    #     type='NormalizeTensor', #required
+    #     mean=[0.485, 0.456, 0.406],
+    #     std=[0.229, 0.224, 0.225]),
+    # dict(
+    #     type='BottomUpGenerateTarget',
+    #     sigma=2,
+    #     max_num_people=5,
+    # ),
+    dict(
+        type='Collect',
+        keys=['img'],
+        meta_keys=[
+            'image_file', 'aug_data', 'test_scale_factor', 'base_size',
+            'center', 'scale', 'flip_index'
+        ]),
+]
 
+
+samples_per_gpu = 8
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=samples_per_gpu,
     workers_per_gpu=1,
-    val_dataloader=dict(samples_per_gpu=16),
-    test_dataloader=dict(samples_per_gpu=16),
+    val_dataloader=dict(samples_per_gpu=samples_per_gpu),
+    test_dataloader=dict(samples_per_gpu=samples_per_gpu),
     train=dict(
         type='BottomUpIDCardDataset',
         ann_file=f'{data_root}/annotations/mini_annotations.json',

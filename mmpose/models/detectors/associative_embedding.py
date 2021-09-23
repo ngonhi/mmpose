@@ -294,9 +294,10 @@ class AssociativeEmbedding(BasePose):
 
         aug_h = img_metas[0]['aug_data'][0].size(3)
         aug_w = img_metas[0]['aug_data'][0].size(2)
+        channel = img_metas[0]['aug_data'][0].size(1)
         aug_data = []
         for i in range(len(test_scale_factor)):
-            aug_data.append(torch.empty((img.size(0),img.size(1), aug_w, aug_h)))
+            aug_data.append(torch.empty((img.size(0),channel,aug_w, aug_h)))
             for j in range(len(img_metas)):
                 aug_data[i][j] = img_metas[j]['aug_data'][i]
         aggregated_heatmaps = None
