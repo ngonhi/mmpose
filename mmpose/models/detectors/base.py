@@ -109,6 +109,7 @@ class BasePose(nn.Module, metaclass=ABCMeta):
 
         outputs = dict(
             topk_img_train=topk_img,
+            topk_heatmap_train=topk_heatmap,
             loss=loss,
             log_vars=log_vars,
             num_samples=len(next(iter(data_batch.values()))))
@@ -132,6 +133,7 @@ class BasePose(nn.Module, metaclass=ABCMeta):
         results = self.forward(return_loss=False, **data_batch)
         outputs = dict(results=results,
                         topk_img_val=topk_img,
+                        topk_heatmap_val=topk_heatmap,
                         loss=loss, 
                         log_vars=log_vars,
                         num_samples=len(next(iter(data_batch.values()))))

@@ -2,6 +2,8 @@
 import warnings
 
 import numpy as np
+from skimage import exposure
+import cv2
 
 import mmcv
 import torch
@@ -141,7 +143,16 @@ class AssociativeEmbedding(BasePose):
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
-    def _visualize(self, pose_results, img):
+    def _visualize_heatmap(self, img, heatmap):
+        img_copy = img.copy()
+        for slice in heatmap:
+            map_img = exposure.rescale_intensity(slice, out_range=(0, 255))
+            map_img = np.uint8(map_img) 
+            heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
+            img_copy = cv2.addWeighted(heatmap_img, 0.3, img_copy, 0.8, 0)
+        return img_copy
+
+    def _visualize_keypoint(self, pose_results, img):
         skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
         pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
         pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
@@ -159,9 +170,9 @@ class AssociativeEmbedding(BasePose):
 
         return img
 
-    def _inference(self, results, images, img_metas):
-        img_list = []
-        heatmap_list = []
+    def _inference(self, results, images):
+        img_keypoint = []
+        img_heatmap = []
         for i, result in enumerate(results):
             pose_results = []
             img = invTrans(images[i]).cpu().detach().numpy()
@@ -178,13 +189,13 @@ class AssociativeEmbedding(BasePose):
                 # pose nms
                 keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
                 pose_results = [pose_results[_keep] for _keep in keep]
-                img = self._visualize(pose_results, img)
-            heatmap_list.append(result['output_heatmap'])
-            img_list.append(img)
+                img = self._visualize_keypoint(pose_results, img)
+            img_heatmap.append(self._visualize_keypoint(img, result['output_heatmap'][0]))
+            img_keypoint.append(img)
         
-        img_list = np.array(img_list)
-        heatmap_list = np.array(heatmap_list)
-        return img_list, heatmap_list
+        img_keypoint = np.array(img_keypoint)
+        heatmap_list = np.array(img_heatmap)
+        return img_keypoint, heatmap_list
 
     def _get_results(self, outputs, img_metas):
         scale = img_metas[0]['test_scale_factor'][0]
@@ -303,7 +314,7 @@ class AssociativeEmbedding(BasePose):
         topk_img = [img[i] for i in topk_loss_index]
         topk_img_metas = [img_metas[i] for i in topk_loss_index]
         topk_results = self._get_results(output, topk_img_metas)
-        topk_img, topk_heatmap = self._inference(topk_results, topk_img, topk_img_metas)
+        topk_img, topk_heatmap = self._inference(topk_results, topk_img)
 
         return losses, topk_loss_value, topk_img, topk_heatmap
 
