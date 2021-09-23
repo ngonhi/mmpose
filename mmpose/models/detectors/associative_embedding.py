@@ -11,11 +11,19 @@ from mmcv.visualization.image import imshow
 
 from mmpose.core.evaluation import (aggregate_results, get_group_preds,
                                     get_multi_stage_outputs)
+from mmpose.core.post_processing import oks_nms
 from mmpose.core.post_processing.group import HeatmapParser
 from mmpose.core.visualization import imshow_keypoints
 from .. import builder
 from ..builder import POSENETS
 from .base import BasePose
+
+from torchvision import transforms
+invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+                                                     std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+                                transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
+                                                     std = [ 1., 1., 1. ]),
+                               ])
 
 try:
     from mmcv.runner import auto_fp16
@@ -133,6 +141,51 @@ class AssociativeEmbedding(BasePose):
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
+    def _visualize(self, pose_results, img):
+        skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
+        pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
+        pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
+
+        img = self.show_result(
+            img,
+            pose_results,
+            skeleton=skeleton,
+            pose_link_color=pose_link_color,
+            pose_kpt_color=pose_kpt_color,
+            radius=4,
+            thickness=1,
+            kpt_score_thr=0.3
+        )
+
+        return img
+
+    def _inference(self, results, images, img_metas):
+        img_list = []
+        heatmap_list = []
+        for i, result in enumerate(results):
+            pose_results = []
+            img = invTrans(images[i]).cpu().detach().numpy()
+            img = np.transpose(img, (2,1,0))
+            if len(result['preds']) != 0:
+                for idx, pred in enumerate(result['preds']):
+                    area = (np.max(pred[:, 0]) - np.min(pred[:, 0])) * (
+                        np.max(pred[:, 1]) - np.min(pred[:, 1]))
+                    pose_results.append({
+                        'keypoints': pred[:, :3],
+                        'score': result['scores'][idx],
+                        'area': area,
+                    })
+                # pose nms
+                keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
+                pose_results = [pose_results[_keep] for _keep in keep]
+                img = self._visualize(pose_results, img)
+            heatmap_list.append(result['output_heatmap'])
+            img_list.append(img)
+        
+        img_list = np.array(img_list)
+        heatmap_list = np.array(heatmap_list)
+        return img_list, heatmap_list
+
     def _get_results(self, outputs, img_metas):
         scale = img_metas[0]['test_scale_factor'][0]
         test_scale_factor = img_metas[0]['test_scale_factor']
@@ -242,15 +295,17 @@ class AssociativeEmbedding(BasePose):
     
         # Get top k loss
         batch_size = img.size(0)
-        k = self.train_cfg['topk'] if self.train_cfg['topk'] < batch_size else 1
+        k = self.train_cfg['topk'] if self.train_cfg['topk'] <= batch_size else batch_size
         topk_loss = torch.topk(sum_loss, k, sorted=True)
         topk_loss_value = topk_loss.values.tolist()
         topk_loss_index = topk_loss.indices.tolist()
         
+        topk_img = [img[i] for i in topk_loss_index]
         topk_img_metas = [img_metas[i] for i in topk_loss_index]
         topk_results = self._get_results(output, topk_img_metas)
+        topk_img, topk_heatmap = self._inference(topk_results, topk_img, topk_img_metas)
 
-        return losses, topk_loss_value, topk_results
+        return losses, topk_loss_value, topk_img, topk_heatmap
 
     def forward_dummy(self, img):
         """Used for computing network FLOPs.

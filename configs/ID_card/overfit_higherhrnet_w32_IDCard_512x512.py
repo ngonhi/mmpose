@@ -6,7 +6,7 @@ dist_params = dict(backend='nccl')
 workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=100)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/iter_run'
+work_dir = './work_dirs/test'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -111,7 +111,8 @@ model = dict(
         num_joints=channel_cfg['dataset_joints'],
         img_size=data_cfg['image_size'],
         topk=3,
-        base_size=data_cfg['base_size']),
+        base_size=data_cfg['base_size'],
+        sigmas=[0.025, 0.025, 0.025, 0.025]),
     test_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
         max_num_people=5,
@@ -193,7 +194,7 @@ val_pipeline = [
         ]),
 ]
 
-test_pipeline = val_pipeline = [
+test_pipeline = [
     dict(type='LoadImageFromFile'),
     # dict(
     #     type='BottomUpRandomAffine',
@@ -231,7 +232,7 @@ test_pipeline = val_pipeline = [
 ]
 
 
-samples_per_gpu = 8
+samples_per_gpu = 3
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,

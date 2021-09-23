@@ -101,13 +101,14 @@ class BasePose(nn.Module, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        losses, topk_loss_value, topk_results = self.forward(**data_batch)
+        losses, topk_loss_value, topk_img, topk_heatmap = self.forward(**data_batch)
         loss, log_vars = self._parse_losses(losses)
 
         for i in range(len(topk_loss_value)):
             log_vars['top_'+str(i+1)+'_value'] = topk_loss_value[i]
 
         outputs = dict(
+            topk_img_train=topk_img,
             loss=loss,
             log_vars=log_vars,
             num_samples=len(next(iter(data_batch.values()))))
@@ -122,14 +123,15 @@ class BasePose(nn.Module, metaclass=ABCMeta):
         not implemented with this method, but an evaluation hook.
         """
         # Calculate loss
-        losses, topk_loss_value, topk_results = self.forward(return_loss=True, **data_batch)
+        losses, topk_loss_value, topk_img, topk_heatmap = self.forward(return_loss=True, **data_batch)
 
         loss, log_vars = self._parse_losses(losses)
         for i in range(len(topk_loss_value)):
             log_vars['top_'+str(i+1)+'_value'] = topk_loss_value[i]
-            
+
         results = self.forward(return_loss=False, **data_batch)
         outputs = dict(results=results,
+                        topk_img_val=topk_img,
                         loss=loss, 
                         log_vars=log_vars,
                         num_samples=len(next(iter(data_batch.values()))))
