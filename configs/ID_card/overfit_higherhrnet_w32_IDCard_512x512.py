@@ -174,16 +174,11 @@ val_pipeline = [
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]),
         ]),
-    dict(type='ToTensor'),
+    dict(type='ToTensor'), #required
     dict(
-        type='NormalizeTensor',
+        type='NormalizeTensor', #required
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225]),
-    dict(
-        type='BottomUpGenerateTestTarget',
-        sigma=2,
-        max_num_people=5,
-    ),
     dict(
         type='BottomUpGenerateTarget',
         sigma=2,
@@ -194,8 +189,7 @@ val_pipeline = [
         keys=['img', 'joints', 'targets', 'masks'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index', 'aug_mask', 'aug_joints', 
-            'aug_targets', 'num_scales', 'num_joints', 'max_num_people'
+            'center', 'scale', 'flip_index'
         ]),
 ]
 
