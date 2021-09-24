@@ -6,7 +6,7 @@ dist_params = dict(backend='nccl')
 workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=100)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/test'
+work_dir = './work_dirs/baseline_higherhrnet'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -133,8 +133,9 @@ model = dict(
 
 train_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='Resize'),
     dict(
-        type='BottomUpRandomAffine',
+        type='BottomUpRandomAffine', # To resize image, mask and keypoints
         rot_factor=0,
         scale_factor=[1.0, 1.0],
         scale_type='short',
@@ -159,6 +160,7 @@ train_pipeline = [
 
 val_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='Resize'),
     dict(
         type='BottomUpRandomAffine',
         rot_factor=0,
@@ -248,8 +250,8 @@ data = dict(
         dataset_info={{_base_.dataset_info}}),
     val=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/mini_annotations.json',
-        img_prefix=f'{data_root}/mini/',
+        ann_file=f'{data_root}/annotations/val_annotations.json',
+        img_prefix=f'{data_root}/val/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),

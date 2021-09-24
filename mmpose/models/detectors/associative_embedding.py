@@ -151,6 +151,7 @@ class AssociativeEmbedding(BasePose):
             map_img = np.uint8(map_img) 
             heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
             img_copy = cv2.addWeighted(heatmap_img, 0.3, img_copy, 0.8, 0)
+
         return img_copy
 
     def _visualize_keypoint(self, pose_results, img):
@@ -170,13 +171,17 @@ class AssociativeEmbedding(BasePose):
 
         return img
 
-    def _inference(self, results, images):
+    def _inference(self, results):
         img_keypoint = []
         img_heatmap = []
         for i, result in enumerate(results):
             pose_results = []
-            img = invTrans(images[i]).cpu().detach().numpy()
+            img = result['image']
+            img = invTrans(img).cpu().detach().numpy()
             img = np.transpose(img, (2,1,0))
+            
+            img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
+            
             if len(result['preds']) != 0:
                 for idx, pred in enumerate(result['preds']):
                     area = (np.max(pred[:, 0]) - np.min(pred[:, 0])) * (
@@ -190,14 +195,13 @@ class AssociativeEmbedding(BasePose):
                 keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
                 pose_results = [pose_results[_keep] for _keep in keep]
                 img = self._visualize_keypoint(pose_results, img)
-            img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
             img_keypoint.append(img)
         
         img_keypoint = np.array(img_keypoint)
         heatmap_list = np.array(img_heatmap)
         return img_keypoint, heatmap_list
 
-    def _get_results(self, outputs, img_metas):
+    def _get_results(self, outputs, img_metas, images):
         scale = img_metas[0]['test_scale_factor'][0]
         test_scale_factor = img_metas[0]['test_scale_factor']
         aggregated_heatmaps = None
@@ -254,6 +258,7 @@ class AssociativeEmbedding(BasePose):
             result['scores'] = scores
             result['image_paths'] = image_paths
             result['output_heatmap'] = output_heatmap
+            result['image'] = images[i]
             results.append(result)
         
         return results
@@ -313,8 +318,8 @@ class AssociativeEmbedding(BasePose):
         
         topk_img = [img[i] for i in topk_loss_index]
         topk_img_metas = [img_metas[i] for i in topk_loss_index]
-        topk_results = self._get_results(output, topk_img_metas)
-        topk_img, topk_heatmap = self._inference(topk_results, topk_img)
+        topk_results = self._get_results(output, topk_img_metas, topk_img)
+        topk_img, topk_heatmap = self._inference(topk_results)
 
         return losses, topk_loss_value, topk_img, topk_heatmap
 
@@ -508,3 +513,18 @@ class AssociativeEmbedding(BasePose):
             imwrite(img, out_file)
 
         return img
+
+    def _compute_metrics(results):
+        """
+        Args:
+            results: (list(preds, scores, img_paths, heatmap))
+                * preds (list[np.ndarray(P, K, 3+tag_num)]):
+                  Pose predictions for all people in images.
+                * scores (list[P]):
+                * img_paths (list[str]): For example, ['coco/images/
+                val2017/000000397133.jpg']
+                * heatmap (np.ndarray[N, K, H, W]): model outputs.
+        """
+        
+        
+        
