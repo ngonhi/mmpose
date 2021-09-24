@@ -24,7 +24,7 @@ class Resize:
         Returns:
             dict: Resized results
         """
-        input_size = (int(results['ann_info']['image_size']), int(results['ann_info']['image_size'])
+        input_size = (int(results['ann_info']['image_size']), int(results['ann_info']['image_size']))
         img = results['img']
         if not self.is_train:
             img = mmcv.imresize(img, input_size, interpolation='cubic', backend='cv2')

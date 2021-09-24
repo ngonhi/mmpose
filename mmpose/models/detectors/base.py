@@ -130,8 +130,8 @@ class BasePose(nn.Module, metaclass=ABCMeta):
         for i in range(len(topk_loss_value)):
             log_vars['top_'+str(i+1)+'_value'] = topk_loss_value[i]
 
-        results = self.forward(return_loss=False, **data_batch)
-        outputs = dict(results=results,
+        # results = self.forward(return_loss=False, **data_batch)
+        outputs = dict(#results=results,
                         topk_img_val=topk_img,
                         topk_heatmap_val=topk_heatmap,
                         loss=loss, 

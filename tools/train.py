@@ -17,8 +17,8 @@ from mmpose.datasets import build_dataset
 from mmpose.models import build_posenet
 from mmpose.utils import collect_env, get_root_logger
 
-# from clearml import Task
-# task = Task.init(project_name='ID card crop and alignment', task_name='test_IterBasedRunner')
+from clearml import Task
+# task = Task.init(project_name='ID card crop and alignment', task_name='baseline')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a pose model')
@@ -148,7 +148,7 @@ def main():
 
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
-        val_dataset.pipeline = cfg.data.val.pipeline
+        val_dataset.pipeline = cfg.data.train.pipeline
         datasets.append(build_dataset(val_dataset))
 
     if cfg.checkpoint_config is not None:

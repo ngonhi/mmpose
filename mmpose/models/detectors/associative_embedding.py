@@ -144,7 +144,8 @@ class AssociativeEmbedding(BasePose):
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
     def _visualize_heatmap(self, img, heatmap):
-        img_copy = img.copy()
+        img = mmcv.imread(img)
+        img_copy = (img.copy()*255).astype(np.uint8)
         for slice in heatmap:
             map_img = exposure.rescale_intensity(slice, out_range=(0, 255))
             map_img = np.uint8(map_img) 
@@ -156,7 +157,6 @@ class AssociativeEmbedding(BasePose):
         skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
         pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
         pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
-
         img = self.show_result(
             img,
             pose_results,
@@ -190,7 +190,7 @@ class AssociativeEmbedding(BasePose):
                 keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
                 pose_results = [pose_results[_keep] for _keep in keep]
                 img = self._visualize_keypoint(pose_results, img)
-            img_heatmap.append(self._visualize_keypoint(img, result['output_heatmap'][0]))
+            img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
             img_keypoint.append(img)
         
         img_keypoint = np.array(img_keypoint)

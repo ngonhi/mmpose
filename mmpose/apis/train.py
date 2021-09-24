@@ -5,7 +5,7 @@ import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import DistSamplerSeedHook, OptimizerHook, build_runner
 
-from mmpose.core import DistEvalHook, EvalHook, build_optimizers
+from mmpose.core import DistEvalHook, EvalHook, DistEvalTrainHook, EvalTrainHook, build_optimizers
 from mmpose.core.distributed_wrapper import DistributedDataParallelWrapper
 from mmpose.datasets import build_dataloader, build_dataset
 from mmpose.utils import get_root_logger
@@ -126,7 +126,7 @@ def train_model(model,
     if distributed:
         runner.register_hook(DistSamplerSeedHook())
 
-    # register eval hookss
+    # register eval hooks for validation set
     if validate:
         eval_cfg = cfg.get('evaluation', {})
         val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
@@ -143,6 +143,23 @@ def train_model(model,
         val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
         eval_hook = DistEvalHook if distributed else EvalHook
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
+
+    #register eval hooks for training set
+    eval_cfg = cfg.get('evaluation', {})
+    train_dataset = build_dataset(cfg.data.val, dict(test_mode=False))
+    dataloader_setting = dict(
+        samples_per_gpu=cfg.data.get('samples_per_gpu', 1),
+        workers_per_gpu=cfg.data.get('workers_per_gpu', {}),
+        # cfg.gpus will be ignored if distributed
+        num_gpus=len(cfg.gpu_ids),
+        dist=distributed,
+        drop_last=False,
+        shuffle=False)
+    dataloader_setting = dict(dataloader_setting,
+                                **cfg.data.get('val_dataloader', {}))
+    train_dataloader = build_dataloader(train_dataset, **dataloader_setting)
+    eval_hook = DistEvalTrainHook if distributed else EvalTrainHook
+    runner.register_hook(eval_hook(train_dataloader, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)

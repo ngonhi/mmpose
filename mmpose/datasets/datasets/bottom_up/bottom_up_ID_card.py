@@ -275,5 +275,4 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
         coco_eval.summarize()
 
         info_str = list(zip(stats_names, coco_eval.stats))
-
         return info_str
