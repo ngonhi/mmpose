@@ -26,8 +26,10 @@ class Resize:
         """
         input_size = (int(results['ann_info']['image_size']), int(results['ann_info']['image_size']))
         img = results['img']
+        img_shape = img.shape
+        results['ann_info']['rescale'] = [img_shape[1]/input_size[0], img_shape[0]/input_size[1]]
         if not self.is_train:
-            img = mmcv.imresize(img, input_size, interpolation='cubic', backend='cv2')
+            img, w, h = mmcv.imresize(img, input_size, interpolation='bicubic', backend='cv2', return_scale=True)
         else:
             if random.random() < 0.5: # Random interpolation with opencv and pillow
                 backend = 'cv2' if random.random() < 0.5 else 'pillow'

@@ -4,6 +4,8 @@ import warnings
 import numpy as np
 from skimage import exposure
 import cv2
+import os
+import tempfile
 
 import mmcv
 import torch
@@ -92,6 +94,8 @@ class AssociativeEmbedding(BasePose):
 
     @auto_fp16(apply_to=('img', ))
     def forward(self,
+                compute_metrics=True,
+                dataset=None,
                 img=None,
                 targets=None,
                 masks=None,
@@ -139,131 +143,12 @@ class AssociativeEmbedding(BasePose):
         """
         if return_loss:
             return self.forward_train(img, targets, masks, joints, img_metas, return_heatmap=return_heatmap,
-                                      **kwargs)
+                                      compute_metrics=compute_metrics, dataset=dataset, **kwargs)
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
-    def _visualize_heatmap(self, img, heatmap):
-        img = mmcv.imread(img)
-        img_copy = (img.copy()*255).astype(np.uint8)
-        for slice in heatmap:
-            map_img = exposure.rescale_intensity(slice, out_range=(0, 255))
-            map_img = np.uint8(map_img) 
-            heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
-            img_copy = cv2.addWeighted(heatmap_img, 0.3, img_copy, 0.8, 0)
-
-        return img_copy
-
-    def _visualize_keypoint(self, pose_results, img):
-        skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
-        pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
-        pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
-        img = self.show_result(
-            img,
-            pose_results,
-            skeleton=skeleton,
-            pose_link_color=pose_link_color,
-            pose_kpt_color=pose_kpt_color,
-            radius=4,
-            thickness=1,
-            kpt_score_thr=0.3
-        )
-
-        return img
-
-    def _inference(self, results):
-        img_keypoint = []
-        img_heatmap = []
-        for i, result in enumerate(results):
-            pose_results = []
-            img = result['image']
-            img = invTrans(img).cpu().detach().numpy()
-            img = np.transpose(img, (2,1,0))
-            
-            img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
-            
-            if len(result['preds']) != 0:
-                for idx, pred in enumerate(result['preds']):
-                    area = (np.max(pred[:, 0]) - np.min(pred[:, 0])) * (
-                        np.max(pred[:, 1]) - np.min(pred[:, 1]))
-                    pose_results.append({
-                        'keypoints': pred[:, :3],
-                        'score': result['scores'][idx],
-                        'area': area,
-                    })
-                # pose nms
-                keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
-                pose_results = [pose_results[_keep] for _keep in keep]
-                img = self._visualize_keypoint(pose_results, img)
-            img_keypoint.append(img)
-        
-        img_keypoint = np.array(img_keypoint)
-        heatmap_list = np.array(img_heatmap)
-        return img_keypoint, heatmap_list
-
-    def _get_results(self, outputs, img_metas, images):
-        scale = img_metas[0]['test_scale_factor'][0]
-        test_scale_factor = img_metas[0]['test_scale_factor']
-        aggregated_heatmaps = None
-        tags_list = []
-
-        _, heatmaps, tags = get_multi_stage_outputs(
-            outputs=outputs,
-            num_joints=self.test_cfg['num_joints'],
-            with_heatmaps=self.test_cfg['with_heatmaps'],
-            with_ae=self.test_cfg['with_ae'],
-            tag_per_joint=self.test_cfg['tag_per_joint'],    
-            project2image=self.test_cfg['project2image'],
-            size_projected=img_metas[0]['base_size'],
-            outputs_flip=None,
-            flip_index=None,
-            align_corners=self.use_udp)
-
-        aggregated_heatmaps, tags_list = aggregate_results(
-            scale=scale,
-            aggregated_heatmaps=aggregated_heatmaps,
-            tags_list=tags_list,
-            heatmaps=heatmaps,
-            tags=tags,
-            test_scale_factor=test_scale_factor,
-            project2image=self.test_cfg['project2image'],
-            flip_test=False,
-            align_corners=self.use_udp)
-        tags = torch.cat(tags_list, dim=4)
-
-        results = []
-        for i in range(len(img_metas)):
-            result = {}
-            
-            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0)
-            _tags = torch.unsqueeze(tags[i], 0)
-            # perform grouping
-            grouped, scores = self.parser.parse(_aggregated_heatmaps.detach(),
-                                                _tags.detach(),
-                                                self.test_cfg['adjust'],
-                                                self.test_cfg['refine'])
-
-            preds = get_group_preds(
-                grouped,
-                img_metas[i]['center'],
-                img_metas[i]['scale'], [_aggregated_heatmaps.size(3),
-                        _aggregated_heatmaps.size(2)],
-                use_udp=self.use_udp)
-            image_paths = []
-            image_paths.append(img_metas[i]['image_file'])
-
-            output_heatmap = _aggregated_heatmaps.detach().cpu().numpy()
-
-            result['preds'] = preds
-            result['scores'] = scores
-            result['image_paths'] = image_paths
-            result['output_heatmap'] = output_heatmap
-            result['image'] = images[i]
-            results.append(result)
-        
-        return results
-
-    def forward_train(self, img, targets, masks, joints, img_metas, return_heatmap, **kwargs):
+    def forward_train(self, img, targets, masks, joints, img_metas, 
+                        compute_metrics, dataset, return_heatmap, **kwargs):
         """Forward the bottom-up model and calculate the loss.
 
         Note:
@@ -308,20 +193,25 @@ class AssociativeEmbedding(BasePose):
             losses.update(keypoint_losses)
     
         # Calculate metrics
-    
+        results = self._get_results(output, img_metas, img)
+
+        metrics = {}
+        if compute_metrics:
+            metrics = self._compute_metrics(dataset, results)
+
         # Get top k loss
+        joints = self._get_joints(dataset, img_metas)
         batch_size = img.size(0)
         k = self.train_cfg['topk'] if self.train_cfg['topk'] <= batch_size else batch_size
         topk_loss = torch.topk(sum_loss, k, sorted=True)
         topk_loss_value = topk_loss.values.tolist()
         topk_loss_index = topk_loss.indices.tolist()
         
-        topk_img = [img[i] for i in topk_loss_index]
-        topk_img_metas = [img_metas[i] for i in topk_loss_index]
-        topk_results = self._get_results(output, topk_img_metas, topk_img)
-        topk_img, topk_heatmap = self._inference(topk_results)
+        topk_results = [results[i] for i in topk_loss_index]
+        topk_joints = [joints[i] for i in topk_loss_index]
+        visualize_output = self._visualize_results(topk_results, topk_joints, topk_loss_value)
 
-        return losses, topk_loss_value, topk_img, topk_heatmap
+        return losses, topk_loss_value, visualize_output, metrics
 
     def forward_dummy(self, img):
         """Used for computing network FLOPs.
@@ -514,7 +404,173 @@ class AssociativeEmbedding(BasePose):
 
         return img
 
-    def _compute_metrics(results):
+    def _get_joints(self, dataset, img_metas):
+        """Get target joints"""
+        joints = []
+        coco = dataset.coco
+        for item in img_metas:
+            w_scale, h_scale = item['rescale']
+            image_name = os.path.basename(item['image_file'])
+            img_id = dataset.name2id[image_name]
+            ann_ids = coco.getAnnIds(imgIds=img_id)
+            anno = coco.loadAnns(ann_ids)
+            joint = dataset._get_joints(anno)
+            joint[:,:,0] = joint[:,:,0] / w_scale
+            joint[:,:,1] = joint[:,:,1] / h_scale
+            joints.append(joint)
+        
+        # Rescale joints to input image size
+
+        return joints
+
+    def _draw_target(self, img, joints):
+        """Draw target joints"""
+        img_copy = img.copy()
+        colors = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
+        for i in range(joints.shape[0]): # Num card in image
+            for j in range(joints.shape[1]): # Num keypoints
+                x = int(joints[i, j, 0])
+                y = int(joints[i, j, 1])
+                img_copy = cv2.circle(img_copy, (x, y),
+                                        radius=4, color=colors[j], thickness=5)
+        return img_copy
+
+    def _visualize_heatmap(self, img, heatmap):
+        """Draw heatmap images, one heatmap per keypoint"""
+        img = mmcv.imread(img)
+        img = img.copy()
+        heatmap_embedded_img = []
+        for slice in heatmap:
+            img_copy = img.copy()
+            map_img = exposure.rescale_intensity(slice, out_range=(0, 255))
+            map_img = np.uint8(map_img) 
+            heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
+            heatmap_embedded_img.append(cv2.addWeighted(heatmap_img, 0.3, img_copy, 0.8, 0))
+
+        heatmap_embedded_img = np.array(heatmap_embedded_img)
+        return heatmap_embedded_img
+
+    def _visualize_keypoint(self, pose_results, img):
+        img_copy = img.copy()
+        skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
+        pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
+        pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
+        img_copy = self.show_result(
+            img_copy,
+            pose_results,
+            skeleton=skeleton,
+            pose_link_color=pose_link_color,
+            pose_kpt_color=pose_kpt_color,
+            radius=4,
+            thickness=1,
+            kpt_score_thr=0.3
+        )
+
+        return img_copy
+
+    def _visualize_results(self, results, joints, losses):
+        img_keypoint = []
+        img_heatmap = []
+        target_img = []
+        for i, result in enumerate(results):
+            pose_results = []
+            img = result['image']
+            img = invTrans(img).cpu().detach().numpy()
+            img = np.transpose(img, (1,2,0))
+            img = (img*255).astype(np.uint8)
+            
+            img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
+            target_img.append(self._draw_target(img, joints[i]))
+            
+            if len(result['preds']) != 0:
+                for idx, pred in enumerate(result['preds']):
+                    area = (np.max(pred[:, 0]) - np.min(pred[:, 0])) * (
+                        np.max(pred[:, 1]) - np.min(pred[:, 1]))
+                    pose_results.append({
+                        'keypoints': pred[:, :3],
+                        'score': result['scores'][idx],
+                        'area': area,
+                    })
+                # pose nms
+                keep = oks_nms(pose_results, thr=0.9, sigmas=self.train_cfg.sigmas)
+                pose_results = [pose_results[_keep] for _keep in keep]
+                img = self._visualize_keypoint(pose_results, img, losses[i])
+            img = self._draw_text(img, f'loss: {losses[i]:.4f}')
+            img_keypoint.append(img)
+        
+        img_keypoint = np.array(img_keypoint) \
+            .reshape(len(results), 1, img_keypoint[0].shape[0], img_keypoint[0].shape[1], img_keypoint[0].shape[2])
+        img_heatmap = np.array(img_heatmap)
+        target_img = np.array(target_img) \
+            .reshape(len(results), 1, target_img[0].shape[0], target_img[0].shape[1], target_img[0].shape[2])
+        visualize_output = np.concatenate((target_img, img_keypoint, img_heatmap), axis=1)
+
+        return visualize_output
+
+    def _get_results(self, outputs, img_metas, images):
+        """From model output, generate score, predictions and output heatmap"""
+        scale = img_metas[0]['test_scale_factor'][0]
+        test_scale_factor = img_metas[0]['test_scale_factor']
+        aggregated_heatmaps = None
+        tags_list = []
+
+        _, heatmaps, tags = get_multi_stage_outputs(
+            outputs=outputs,
+            num_joints=self.test_cfg['num_joints'],
+            with_heatmaps=self.test_cfg['with_heatmaps'],
+            with_ae=self.test_cfg['with_ae'],
+            tag_per_joint=self.test_cfg['tag_per_joint'],    
+            project2image=self.test_cfg['project2image'],
+            size_projected=img_metas[0]['base_size'],
+            outputs_flip=None,
+            flip_index=None,
+            align_corners=self.use_udp)
+
+        aggregated_heatmaps, tags_list = aggregate_results(
+            scale=scale,
+            aggregated_heatmaps=aggregated_heatmaps,
+            tags_list=tags_list,
+            heatmaps=heatmaps,
+            tags=tags,
+            test_scale_factor=test_scale_factor,
+            project2image=self.test_cfg['project2image'],
+            flip_test=False,
+            align_corners=self.use_udp)
+        tags = torch.cat(tags_list, dim=4)
+
+        results = []
+        for i in range(len(img_metas)):
+            result = {}
+            
+            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0)
+            _tags = torch.unsqueeze(tags[i], 0)
+            # perform grouping
+            grouped, scores = self.parser.parse(_aggregated_heatmaps.detach(),
+                                                _tags.detach(),
+                                                self.test_cfg['adjust'],
+                                                self.test_cfg['refine'])
+
+            preds = get_group_preds(
+                grouped,
+                img_metas[i]['center'],
+                img_metas[i]['scale'], [_aggregated_heatmaps.size(3),
+                        _aggregated_heatmaps.size(2)],
+                use_udp=self.use_udp)
+            image_paths = []
+            image_paths.append(img_metas[i]['image_file'])
+
+            output_heatmap = _aggregated_heatmaps.detach().cpu().numpy()
+
+            result['preds'] = preds
+            result['scores'] = scores
+            result['image_paths'] = image_paths
+            result['output_heatmap'] = output_heatmap
+            result['image'] = images[i]
+            results.append(result)
+        
+        return results
+
+    def _compute_metrics(self, dataset, results):
         """
         Args:
             results: (list(preds, scores, img_paths, heatmap))
@@ -525,6 +581,26 @@ class AssociativeEmbedding(BasePose):
                 val2017/000000397133.jpg']
                 * heatmap (np.ndarray[N, K, H, W]): model outputs.
         """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eval_res = dataset.evaluate(
+                results,
+                res_folder=tmpdir
+            )
         
+        return eval_res
         
-        
+    def _draw_text(self, img, text,
+                    font=cv2.FONT_HERSHEY_PLAIN,
+                    font_scale=1,
+                    font_thickness=1,
+                    text_color=(0, 0, 0),
+                    text_color_bg=(255, 255, 255)):
+        img_copy = img.copy()
+        h, w, _ = img.shape
+        text_size, _ = cv2.getTextSize(text, font, font_scale, font_thickness)
+        text_w, text_h = text_size
+        x = w - 20 - text_w
+        y = 10
+        img_copy = cv2.rectangle(img_copy, (x,y), (x + text_w + 10, y + text_h + 10), text_color_bg, -1)
+        img_copy = cv2.putText(img_copy, text, (x+5, y+5 + text_h + font_scale - 1), font, font_scale, text_color, font_thickness)
+        return img_copy

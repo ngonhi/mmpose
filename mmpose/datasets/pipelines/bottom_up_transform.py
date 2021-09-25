@@ -668,7 +668,6 @@ class BottomUpGetImgSize:
         img = results['img']
 
         h, w, _ = img.shape
-
         # calculate the size for min_scale
         min_input_size = _ceil_to_multiples_of(self.min_scale * input_size, 64)
         if w < h:

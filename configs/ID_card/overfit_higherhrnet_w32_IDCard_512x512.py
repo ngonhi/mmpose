@@ -155,7 +155,7 @@ train_pipeline = [
     dict(
         type='Collect',
         keys=['img', 'joints', 'targets', 'masks'],
-        meta_keys=['image_file', 'center', 'scale', 'test_scale_factor', 'base_size']),
+        meta_keys=['image_file', 'center', 'scale', 'test_scale_factor', 'base_size', 'rescale']),
 ]
 
 val_pipeline = [
@@ -192,12 +192,13 @@ val_pipeline = [
         keys=['img', 'joints', 'targets', 'masks'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index'
+            'center', 'scale', 'flip_index', 'rescale'
         ]),
 ]
 
 test_pipeline = [
     dict(type='LoadImageFromFile'),
+    # dict(type='Resize', is_train=False),
     # dict(
     #     type='BottomUpRandomAffine',
     #     rot_factor=0,
@@ -234,7 +235,7 @@ test_pipeline = [
 ]
 
 
-samples_per_gpu = 3
+samples_per_gpu = 12
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -243,15 +244,15 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=samples_per_gpu),
     train=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/mini_annotations.json',
-        img_prefix=f'{data_root}/mini/',
+        ann_file=f'{data_root}/annotations/train_annotations.json',
+        img_prefix=f'{data_root}/train/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
     val=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/val_annotations.json',
-        img_prefix=f'{data_root}/val/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),
