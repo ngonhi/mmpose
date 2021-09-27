@@ -4,4 +4,4 @@
 CONFIG=~/ID_Card/mmpose/configs/ID_card/overfit_higherhrnet_w32_IDCard_512x512.py
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
-python $(dirname "$0")/train.py $CONFIG
+python -W ignore $(dirname "$0")/train.py $CONFIG

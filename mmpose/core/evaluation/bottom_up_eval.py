@@ -220,6 +220,7 @@ def get_group_preds(grouped_joints,
         results = []
         for person in grouped_joints[0]:
             joints = transform_preds(person, center, scale, heatmap_size)
+            print(joints)
             results.append(joints)
 
     return results

@@ -184,7 +184,6 @@ def transform_preds(coords, center, scale, output_size, use_udp=False):
     else:
         scale_x = scale[0] / output_size[0]
         scale_y = scale[1] / output_size[1]
-    print(scale, scale_x, scale_y)
 
     target_coords = np.ones_like(coords)
     target_coords[:, 0] = coords[:, 0] * scale_x + center[0] - scale[0] * 0.5

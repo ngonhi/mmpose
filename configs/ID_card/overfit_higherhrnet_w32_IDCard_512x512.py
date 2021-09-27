@@ -4,7 +4,7 @@ load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco
 resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
 dist_params = dict(backend='nccl')
 workflow = [('train', 1), ('val', 1)]
-checkpoint_config = dict(interval=100)
+checkpoint_config = dict(interval=5)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
 work_dir = './work_dirs/baseline_higherhrnet'
 optimizer = dict(
@@ -27,7 +27,7 @@ log_config = dict(
         dict(type='TensorboardLoggerHook')
     ])
 total_epochs = 5
-runner = dict(type='EpochBasedRunner', max_epochs=200)
+runner = dict(type='EpochBasedRunner', max_epochs=50)
 # runner = dict(type='IterBasedRunner', max_iters=3000)
 
 channel_cfg = dict(
@@ -110,7 +110,7 @@ model = dict(
     train_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
         img_size=data_cfg['image_size'],
-        topk=3,
+        topk=9,
         base_size=data_cfg['base_size'],
         sigmas=[0.025, 0.025, 0.025, 0.025]),
     test_cfg=dict(
@@ -192,7 +192,7 @@ val_pipeline = [
         keys=['img', 'joints', 'targets', 'masks'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index', 'rescale'
+            'center', 'scale', 'flip_index'
         ]),
 ]
 
@@ -239,13 +239,13 @@ samples_per_gpu = 12
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,
-    workers_per_gpu=1,
-    val_dataloader=dict(samples_per_gpu=samples_per_gpu),
-    test_dataloader=dict(samples_per_gpu=samples_per_gpu),
+    workers_per_gpu=8,
+    val_dataloader=dict(samples_per_gpu=12),
+    test_dataloader=dict(samples_per_gpu=12),
     train=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/train_annotations.json',
-        img_prefix=f'{data_root}/train/',
+        ann_file=f'{data_root}/annotations/mini_annotations.json',
+        img_prefix=f'{data_root}/mini/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
