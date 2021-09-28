@@ -1,12 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import warnings
-from mmpose.core.utils import toploss_hook
 
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import DistSamplerSeedHook, OptimizerHook, build_runner
 
-from mmpose.core import DistEvalHook, EvalHook, build_optimizers, TopLossHook
+from mmpose.core import DistEvalHook, EvalHook, build_optimizers, TopLossHook, ComputeTrainMetricsHook
 from mmpose.core.distributed_wrapper import DistributedDataParallelWrapper
 from mmpose.datasets import build_dataloader, build_dataset
 from mmpose.utils import get_root_logger
@@ -132,6 +131,7 @@ def train_model(model,
     if top_k_top_losses > batch_size:
         top_k_top_losses = batch_size
     runner.register_hook(TopLossHook(top_k_top_losses))
+    runner.register_hook(ComputeTrainMetricsHook(data_loaders[0]))
 
     # register eval hooks for validation set
     if validate:

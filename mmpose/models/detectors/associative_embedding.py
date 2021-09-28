@@ -140,7 +140,7 @@ class AssociativeEmbedding(BasePose):
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
     def forward_train(self, img, targets, masks, joints, img_metas, 
-                        compute_metrics, dataset, return_heatmap, **kwargs):
+                        return_heatmap, **kwargs):
         """Forward the bottom-up model and calculate the loss.
 
         Note:
@@ -187,11 +187,7 @@ class AssociativeEmbedding(BasePose):
         # Calculate metrics
         results = self._get_results(output, img_metas, img, sum_loss)
 
-        metrics = {}
-        # if compute_metrics:
-        #     metrics = self._compute_metrics(dataset, results)
-
-        return losses, results, metrics
+        return losses, results
 
     def forward_dummy(self, img):
         """Used for computing network FLOPs.
@@ -302,10 +298,13 @@ class AssociativeEmbedding(BasePose):
                 scale, [_aggregated_heatmaps.size(3),
                         _aggregated_heatmaps.size(2)],
                 use_udp=self.use_udp)
+            # Rescale to original dataset scale
             if 'rescale' in img_metas[i]:
-                preds[:, 0] = preds[:, 0] * img_metas[i]['rescale'][0]
-                preds[:, 1] = preds[:, 1] * img_metas[i]['rescale'][1]
-            
+                if len(preds) > 0:
+                    for i, item in enumerate(preds):
+                        item[:, 0] = item[:, 0] * img_metas[i]['rescale'][0]
+                        item[:, 1] = item[:, 1] * img_metas[i]['rescale'][1]
+                        preds[i] = item
             image_paths = []
             image_paths.append(img_metas[i]['image_file'])
 
@@ -439,34 +438,18 @@ class AssociativeEmbedding(BasePose):
                 use_udp=self.use_udp)
 
             output_heatmap = _aggregated_heatmaps.detach().cpu().numpy()
-
+            image_paths = []
+            image_paths.append(img_metas[i]['image_file'])
+    
             result['preds'] = preds
             result['scores'] = scores
-            result['image_file'] = img_metas[i]['image_file']
+            result['image_paths'] = image_paths
             result['output_heatmap'] = output_heatmap
-            result['image'] = images[i]
-            result['loss'] = sum_loss[i]
+            result['image'] = images[i].detach().cpu().numpy()
+            result['loss'] = sum_loss[i].detach().cpu().numpy()
             result['rescale'] = img_metas[i]['rescale']
             results.append(result)
         
         return results
 
-    def _compute_metrics(self, dataset, results):
-        """
-        Args:
-            results: (list(preds, scores, img_paths, heatmap))
-                * preds (list[np.ndarray(P, K, 3+tag_num)]):
-                  Pose predictions for all people in images.
-                * scores (list[P]):
-                * img_paths (list[str]): For example, ['coco/images/
-                val2017/000000397133.jpg']
-                * heatmap (np.ndarray[N, K, H, W]): model outputs.
-        """
-        with tempfile.TemporaryDirectory() as tmpdir:
-            eval_res = dataset.evaluate(
-                results,
-                res_folder=tmpdir
-            )
-        
-        return eval_res
         

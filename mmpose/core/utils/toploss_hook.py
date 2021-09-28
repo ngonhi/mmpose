@@ -4,6 +4,7 @@ import numpy as np
 from skimage import exposure
 import cv2
 import os
+import torch
 
 import mmcv
 from mmpose.core.post_processing import oks_nms
@@ -26,9 +27,14 @@ class TopLossHook(Hook):
         self.top_k_max_train_loss_sample = []
         self.top_k_max_val_loss_sample = []
 
-    def before_train_epoch(self, runner):
-        self.top_k_max_train_loss = - float("inf")
+    def clear(self):
+        self.top_k_max_train_loss = - float ("inf")
+        self.top_k_max_val_loss = - float ("inf")
         self.top_k_max_train_loss_sample = []
+        self.top_k_max_val_loss_sample = []
+
+    def before_train_epoch(self, runner):
+        self.clear()
 
     def after_train_iter(self, runner):
         # Update top loss sample
@@ -42,14 +48,14 @@ class TopLossHook(Hook):
         visualize_output = self._visualize_results(topk_results, topk_joints)
         runner.outputs['train_visualize_output'] = visualize_output
 
-        topk_image = [os.path.basename(result['image_file']) for result in topk_results]
+        topk_image = [os.path.basename(result['image_paths'][0]) for result in topk_results]
         epoch = runner.epoch+1
-        log_str = f'Epoch(train) [{epoch}][{len(runner.data_loader)}] Top k loss train images: ' + ', '.join(topk_image)
+        log_str = f'Epoch(train) [{epoch}][{len(runner.data_loader)}]\t Top {self.top_k_top_losses} loss train images: ' + ', '.join(topk_image)
         runner.logger.info(log_str)
+        self.clear()
         
     def before_val_epoch(self, runner):
-        self.top_k_max_val_loss = - float("inf")
-        self.top_k_max_val_loss_sample = []
+        self.clear()
 
     def after_val_iter(self, runner):
         # Update top loss sample
@@ -57,16 +63,17 @@ class TopLossHook(Hook):
 
     def after_val_epoch(self, runner):
         # Generate visualize image from top samples
-        topk_results = self.top_k_max_train_loss_sample
+        topk_results = self.top_k_max_val_loss_sample
         topk_joints = self._get_joints(runner.data_loader.dataset, topk_results)
 
         visualize_output = self._visualize_results(topk_results, topk_joints)
         runner.outputs['val_visualize_output'] = visualize_output
 
-        topk_image = [os.path.basename(result['image_file']) for result in topk_results]
-        epoch = runner.epoch+1
-        log_str = f'Epoch(val) [{epoch}][{len(runner.data_loader)}] Top k loss val images: ' + ', '.join(topk_image)
+        topk_image = [os.path.basename(result['image_paths'][0]) for result in topk_results]
+        epoch = runner.epoch
+        log_str = f'Epoch(val) [{epoch}][{len(runner.data_loader)}]\t Top {self.top_k_top_losses} loss val images: ' + ', '.join(topk_image)
         runner.logger.info(log_str)
+        self.clear()
         
     def _get_top_loss_of_k_sample_in_batch(self, runner, subset='train'):
         # If the whole batch have loss smaller than self.top_k_max_loss
@@ -112,7 +119,7 @@ class TopLossHook(Hook):
         coco = dataset.coco
         for sample in top_k_loss_samples:
             w_scale, h_scale = sample['rescale']
-            image_name = os.path.basename(sample['image_file'])
+            image_name = os.path.basename(sample['image_paths'][0])
             img_id = dataset.name2id[image_name]
             ann_ids = coco.getAnnIds(imgIds=img_id)
             anno = coco.loadAnns(ann_ids)
@@ -204,7 +211,7 @@ class TopLossHook(Hook):
         for i, result in enumerate(results):
             pose_results = []
             img = result['image']
-            img = invTrans(img).cpu().detach().numpy()
+            img = invTrans(torch.tensor(img)).detach().cpu().numpy()
             img = np.transpose(img, (1,2,0))
             img = (img*255).astype(np.uint8)
             

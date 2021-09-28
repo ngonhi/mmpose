@@ -75,7 +75,7 @@ class BasePose(nn.Module, metaclass=ABCMeta):
 
         return loss, log_vars
 
-    def train_step(self, data_batch, optimizer, dataset, **kwargs):
+    def train_step(self, data_batch, optimizer, **kwargs):
         """The iteration step during training.
 
         This method defines an iteration step during training, except for the
@@ -101,7 +101,7 @@ class BasePose(nn.Module, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        losses, results, metrics= self.forward(dataset=dataset, **data_batch)
+        losses, results = self.forward(**data_batch)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
@@ -112,7 +112,7 @@ class BasePose(nn.Module, metaclass=ABCMeta):
 
         return outputs
 
-    def val_step(self, data_batch, optimizer, dataset, **kwargs):
+    def val_step(self, data_batch, optimizer, **kwargs):
         """The iteration step during validation.
 
         This method shares the same signature as :func:`train_step`, but used
@@ -120,15 +120,11 @@ class BasePose(nn.Module, metaclass=ABCMeta):
         not implemented with this method, but an evaluation hook.
         """
         # Calculate loss
-        losses, results, metrics = self.forward(dataset=dataset, compute_metrics=False, **data_batch)
+        losses, results = self.forward(**data_batch)
 
         loss, log_vars = self._parse_losses(losses)
-        # for i in range(len(topk_loss_value)):
-        #     log_vars['top_'+str(i+1)+'_value'] = topk_loss_value[i]
 
-        # results = self.forward(return_loss=False, **data_batch)
         outputs = dict(results=results,
-                        # val_visualize_output=visualize_output,
                         loss=loss, 
                         log_vars=log_vars,
                         num_samples=len(next(iter(data_batch.values()))))

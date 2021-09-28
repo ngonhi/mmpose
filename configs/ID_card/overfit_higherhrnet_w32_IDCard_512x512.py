@@ -1,12 +1,11 @@
 _base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
-resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/overfit_higherhrnet_w32_IDCard_512x512_evaluate_batch>1/latest.pth'
-dist_params = dict(backend='nccl')
+resume_from = '/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrnet/best_AP_epoch_12.pth'
 workflow = [('train', 1), ('val', 1)]
-checkpoint_config = dict(interval=5)
+checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/baseline_higherhrnet'
+work_dir = './work_dirs/test'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -21,13 +20,12 @@ lr_config = dict(
     step=[200, 260])
 
 log_config = dict(
-    interval=1, 
+    interval=20, 
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
-total_epochs = 5
-runner = dict(type='EpochBasedRunner', max_epochs=50)
+runner = dict(type='EpochBasedRunner', max_epochs=200)
 # runner = dict(type='IterBasedRunner', max_iters=3000)
 
 channel_cfg = dict(
@@ -240,19 +238,19 @@ data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,
     workers_per_gpu=8,
-    val_dataloader=dict(samples_per_gpu=12),
-    test_dataloader=dict(samples_per_gpu=12),
+    val_dataloader=dict(samples_per_gpu=samples_per_gpu),
+    test_dataloader=dict(samples_per_gpu=samples_per_gpu),
     train=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/mini_annotations.json',
-        img_prefix=f'{data_root}/mini/',
+        ann_file=f'{data_root}/annotations/train_annotations.json',
+        img_prefix=f'{data_root}/train/',
         data_cfg=data_cfg,
         pipeline=train_pipeline,
         dataset_info={{_base_.dataset_info}}),
     val=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/mini_annotations.json',
-        img_prefix=f'{data_root}/mini/',
+        ann_file=f'{data_root}/annotations/val_annotations.json',
+        img_prefix=f'{data_root}/val/',
         data_cfg=data_cfg,
         pipeline=val_pipeline,
         dataset_info={{_base_.dataset_info}}),
