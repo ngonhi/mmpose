@@ -211,7 +211,7 @@ class TopLossHook(Hook):
         for i, result in enumerate(results):
             pose_results = []
             img = result['image']
-            img = invTrans(torch.tensor(img)).detach().cpu().numpy()
+            img = invTrans(img).detach().cpu().numpy()
             img = np.transpose(img, (1,2,0))
             img = (img*255).astype(np.uint8)
             

@@ -1,11 +1,11 @@
 _base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
-resume_from = '/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrnet/best_AP_epoch_12.pth'
+resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrnet/best_AP_epoch_12.pth'
 workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/test'
+work_dir = './work_dirs/baseline_higherhrnet_no_pretrained'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -25,7 +25,7 @@ log_config = dict(
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
-runner = dict(type='EpochBasedRunner', max_epochs=200)
+runner = dict(type='EpochBasedRunner', max_epochs=10)
 # runner = dict(type='IterBasedRunner', max_iters=3000)
 
 channel_cfg = dict(
@@ -53,7 +53,7 @@ data_cfg = dict(
 model = dict(
     type='AssociativeEmbedding',
     pretrained='https://download.openmmlab.com/mmpose/'
-    'pretrain_models/hrnet_w32-36af842e.pth',
+    'pretrain_models/hrnet_w32-36af842e.pth', #backbone trained on ImageNet
     backbone=dict(
         type='HRNet',
         in_channels=3,
@@ -190,7 +190,7 @@ val_pipeline = [
         keys=['img', 'joints', 'targets', 'masks'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index'
+            'center', 'scale', 'flip_index', 'rescale'
         ]),
 ]
 
@@ -228,12 +228,12 @@ test_pipeline = [
         keys=['img'],
         meta_keys=[
             'image_file', 'aug_data', 'test_scale_factor', 'base_size',
-            'center', 'scale', 'flip_index'
+            'center', 'scale', 'flip_index', 'rescale'
         ]),
 ]
 
 
-samples_per_gpu = 12
+samples_per_gpu = 16
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -259,6 +259,6 @@ data = dict(
         ann_file=f'{data_root}/annotations/val_annotations.json',
         img_prefix=f'{data_root}/val/',
         data_cfg=data_cfg,
-        pipeline=val_pipeline,
+        pipeline=test_pipeline,
         dataset_info={{_base_.dataset_info}}),
 )

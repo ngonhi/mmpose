@@ -134,8 +134,7 @@ class AssociativeEmbedding(BasePose):
               paths and heatmaps.
         """
         if return_loss:
-            return self.forward_train(img, targets, masks, joints, img_metas, return_heatmap=return_heatmap,
-                                      compute_metrics=compute_metrics, dataset=dataset, **kwargs)
+            return self.forward_train(img, targets, masks, joints, img_metas, return_heatmap=return_heatmap, **kwargs)
         return self.forward_test(
             img, img_metas, return_heatmap=return_heatmap, **kwargs)
     
@@ -301,10 +300,10 @@ class AssociativeEmbedding(BasePose):
             # Rescale to original dataset scale
             if 'rescale' in img_metas[i]:
                 if len(preds) > 0:
-                    for i, item in enumerate(preds):
+                    for j, item in enumerate(preds):
                         item[:, 0] = item[:, 0] * img_metas[i]['rescale'][0]
                         item[:, 1] = item[:, 1] * img_metas[i]['rescale'][1]
-                        preds[i] = item
+                        preds[j] = item
             image_paths = []
             image_paths.append(img_metas[i]['image_file'])
 
@@ -445,7 +444,7 @@ class AssociativeEmbedding(BasePose):
             result['scores'] = scores
             result['image_paths'] = image_paths
             result['output_heatmap'] = output_heatmap
-            result['image'] = images[i].detach().cpu().numpy()
+            result['image'] = images[i]#.detach().cpu().numpy()
             result['loss'] = sum_loss[i].detach().cpu().numpy()
             result['rescale'] = img_metas[i]['rescale']
             results.append(result)
