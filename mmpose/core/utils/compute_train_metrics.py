@@ -1,4 +1,5 @@
 import tempfile
+import sys
 
 from mmcv.runner import HOOKS, Hook
 
@@ -31,9 +32,11 @@ class ComputeTrainMetricsHook(Hook):
                     saved_sample['preds'][i][:, 1] = saved_sample['preds'][i][:, 1] * rescale[1]
             saved_result.append(saved_sample)
         self.results += saved_result
+        print('size of output results after iter', sys.getsizeof(self.results))
 
     def after_train_epoch(self, runner):
         # Compute metrics
+        print('size of output results after epoch', sys.getsizeof(self.results))
         with tempfile.TemporaryDirectory() as tmp_dir:
             eval_res = self.dataloader.dataset.evaluate(
                 self.results,

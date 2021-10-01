@@ -388,8 +388,11 @@ class AssociativeEmbedding(BasePose):
 
     def _get_results(self, outputs, img_metas, images, sum_loss):
         """From model output, generate score, predictions and output heatmap"""
-        scale = img_metas[0]['test_scale_factor'][0]
-        test_scale_factor = img_metas[0]['test_scale_factor']
+        _, h, w = images[0].shape
+        group_preds_center = np.array([round(w / 2.0), round(h / 2.0)])
+        group_pred_scale = np.array([w/200.0, h/200.0])
+        test_scale_factor = [1]
+        scale = test_scale_factor[0]
         aggregated_heatmaps = None
         tags_list = []
 
@@ -400,11 +403,10 @@ class AssociativeEmbedding(BasePose):
             with_ae=self.test_cfg['with_ae'],
             tag_per_joint=self.test_cfg['tag_per_joint'],    
             project2image=self.test_cfg['project2image'],
-            size_projected=img_metas[0]['base_size'],
+            size_projected=(w,h),
             outputs_flip=None,
             flip_index=None,
             align_corners=self.use_udp)
-
         aggregated_heatmaps, tags_list = aggregate_results(
             scale=scale,
             aggregated_heatmaps=aggregated_heatmaps,
@@ -431,8 +433,8 @@ class AssociativeEmbedding(BasePose):
 
             preds = get_group_preds(
                 grouped,
-                img_metas[i]['center'],
-                img_metas[i]['scale'], [_aggregated_heatmaps.size(3),
+                group_preds_center,
+                group_pred_scale, [_aggregated_heatmaps.size(3),
                         _aggregated_heatmaps.size(2)],
                 use_udp=self.use_udp)
 
@@ -444,7 +446,7 @@ class AssociativeEmbedding(BasePose):
             result['scores'] = scores
             result['image_paths'] = image_paths
             result['output_heatmap'] = output_heatmap
-            result['image'] = images[i]#.detach().cpu().numpy()
+            result['image'] = images[i]
             result['loss'] = sum_loss[i].detach().cpu().numpy()
             result['rescale'] = img_metas[i]['rescale']
             results.append(result)
