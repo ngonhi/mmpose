@@ -25,12 +25,17 @@ class Resize:
             dict: Resized results
         """
         input_size = (int(results['ann_info']['image_size']), int(results['ann_info']['image_size']))
-        img = results['img']
+        output_size = results['ann_info']['heatmap_size']
+        img, mask, joints = results['img'], results['mask'], results['joints']
         img_shape = img.shape
-        results['ann_info']['rescale'] = [img_shape[1]/input_size[0], img_shape[0]/input_size[1]]
+        w_scale = img_shape[1]/input_size[0]
+        h_scale = img_shape[0]/input_size[1]
+        results['ann_info']['rescale'] = [w_scale, h_scale]
+        
         if not self.is_train:
             img, w, h = mmcv.imresize(img, input_size, interpolation='bicubic', backend='cv2', return_scale=True)
         else:
+            # Resize image
             if random.random() < 0.5: # Random interpolation with opencv and pillow
                 backend = 'cv2' if random.random() < 0.5 else 'pillow'
                 interpolation = ['nearest', 'bilinear', 'bicubic', 'area', 'lanczos'] if backend=='cv2' else \
@@ -54,6 +59,17 @@ class Resize:
                 img = img.squeeze()
                 img = img.transpose(1, 2, 0).astype(np.uint8)
 
-        results['img'] = img
-
+            for i, _output_size in enumerate(output_size):
+                # Resize masks. Because all images have no iscrowd area and at least 1 keypoints,
+                # we can create an all True mask, meaning not ignoring any area.
+                mask[i] = (np.zeros((_output_size, _output_size))<0.5).astype(np.float32)
+                
+                # Resize keypoints
+                w_scale = img_shape[1]/_output_size
+                h_scale = img_shape[0]/_output_size
+                joints[i][:, :, 0] = joints[i][:, :, 0] / w_scale
+                joints[i][:, :, 1] = joints[i][:, :, 1] / h_scale
+    
+        results['img'], results['mask'], results['joints'] = img, mask, joints
+        
         return results
