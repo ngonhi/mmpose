@@ -1,13 +1,12 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import random
 import cv2
 import numpy as np
 
 from mmpose.core.post_processing import (get_affine_transform, get_warp_matrix,
                                          warp_affine_joints)
 from mmpose.datasets.builder import PIPELINES
-from numpy.lib.type_check import imag
 from .shared_transform import Compose
-from torchvision.transforms import functional as F
 
 
 def _ceil_to_multiples_of(x, base=64):
@@ -21,7 +20,6 @@ def _get_multi_scale_size(image,
                           min_scale,
                           use_udp=False):
     """Get the size for multi-scale training.
-
     Args:
         image: Input image.
         input_size (int): Size of the image input.
@@ -30,10 +28,8 @@ def _get_multi_scale_size(image,
         use_udp (bool): To use unbiased data processing.
             Paper ref: Huang et al. The Devil is in the Details: Delving into
             Unbiased Data Processing for Human Pose Estimation (CVPR 2020).
-
     Returns:
         tuple: A tuple containing multi-scale sizes.
-
         - (w_resized, h_resized) (tuple(int)): resized width/height
         - center (np.ndarray)image center
         - scale (np.ndarray): scales wrt width/height
@@ -73,16 +69,13 @@ def _get_multi_scale_size(image,
 
 def _resize_align_multi_scale(image, input_size, current_scale, min_scale):
     """Resize the images for multi-scale training.
-
     Args:
         image: Input image
         input_size (int): Size of the image input
         current_scale (float): Current scale
         min_scale (float): Minimal scale
-
     Returns:
         tuple: A tuple containing image info.
-
         - image_resized (tuple): size of resize image
         - center (np.ndarray): center of image
         - scale (np.ndarray): scale
@@ -98,16 +91,13 @@ def _resize_align_multi_scale(image, input_size, current_scale, min_scale):
 
 def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
     """Resize the images for multi-scale training.
-
     Args:
         image: Input image
         input_size (int): Size of the image input
         current_scale (float): Current scale
         min_scale (float): Minimal scale
-
     Returns:
         tuple: A tuple containing image info.
-
         - image_resized (tuple): size of resize image
         - center (np.ndarray): center of image
         - scale (np.ndarray): scale
@@ -117,7 +107,7 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
 
     _, center, scale = _get_multi_scale_size(image, input_size, min_scale,
                                              min_scale, True)
-    # resize image
+
     trans = get_warp_matrix(
         theta=0,
         size_input=np.array(scale, dtype=np.float32),
@@ -131,7 +121,6 @@ def _resize_align_multi_scale_udp(image, input_size, current_scale, min_scale):
 
 class HeatmapGenerator:
     """Generate heatmaps for bottom-up models.
-
     Args:
         num_joints (int): Number of keypoints
         output_size (int): Size of feature map
@@ -162,6 +151,7 @@ class HeatmapGenerator:
         """Generate heatmaps."""
         hms = np.zeros((self.num_joints, self.output_size, self.output_size),
                        dtype=np.float32)
+
         sigma = self.sigma
         for p in joints:
             for idx, pt in enumerate(p):
@@ -198,9 +188,7 @@ class HeatmapGenerator:
 class JointsEncoder:
     """Encodes the visible joints into (coordinates, score); The coordinate of
     one joint and its score are of `int` type.
-
     (idx * output_size**2 + y * output_size + x, 1) or (0, 0).
-
     Args:
         max_num_people(int): Max number of people in an image
         num_joints(int): Number of keypoints
@@ -220,10 +208,8 @@ class JointsEncoder:
             number of people in image: N
             number of keypoints: K
             max number of people in an image: M
-
         Args:
             joints (np.ndarray[NxKx3])
-
         Returns:
             visible_kpts (np.ndarray[MxKx2]).
         """
@@ -247,7 +233,6 @@ class JointsEncoder:
 
 class PAFGenerator:
     """Generate part affinity fields.
-
     Args:
         output_size (int): Size of feature map.
         limb_width (int): Limb width of part affinity fields.
@@ -261,7 +246,6 @@ class PAFGenerator:
 
     def _accumulate_paf_map_(self, pafs, src, dst, count):
         """Accumulate part affinity fields between two given joints.
-
         Args:
             pafs (np.ndarray[2xHxW]): paf maps (2 dimensions:x axis and
                 y axis) for a certain limb connection. This argument will
@@ -286,17 +270,20 @@ class PAFGenerator:
         min_y = max(np.floor(min(src[1], dst[1]) - self.limb_width), 0)
         max_y = min(
             np.ceil(max(src[1], dst[1]) + self.limb_width),
-            self.output_size + 1)
+            self.output_size - 1)
 
         range_x = list(range(int(min_x), int(max_x + 1), 1))
         range_y = list(range(int(min_y), int(max_y + 1), 1))
-        xx, yy = np.meshgrid(range_x, range_y)
-        delta_x = xx - src[0]
-        delta_y = yy - src[1]
-        dist = np.abs(delta_x * unit_limb_vec[1] - delta_y * unit_limb_vec[0])
-        mask_local = (dist < self.limb_width)
+
         mask = np.zeros_like(count, dtype=bool)
-        mask[xx, yy] = mask_local
+        if len(range_x) > 0 and len(range_y) > 0:
+            xx, yy = np.meshgrid(range_x, range_y)
+            delta_x = xx - src[0]
+            delta_y = yy - src[1]
+            dist = np.abs(delta_x * unit_limb_vec[1] -
+                          delta_y * unit_limb_vec[0])
+            mask_local = (dist < self.limb_width)
+            mask[yy, xx] = mask_local
 
         pafs[0, mask] += unit_limb_vec[0]
         pafs[1, mask] += unit_limb_vec[1]
@@ -315,8 +302,8 @@ class PAFGenerator:
                              dtype=np.float32)
 
             for p in joints:
-                src = p[sk[0] - 1]
-                dst = p[sk[1] - 1]
+                src = p[sk[0]]
+                dst = p[sk[1]]
                 if src[2] > 0 and dst[2] > 0:
                     self._accumulate_paf_map_(pafs[2 * idx:2 * idx + 2],
                                               src[:2], dst[:2], count)
@@ -329,7 +316,6 @@ class PAFGenerator:
 @PIPELINES.register_module()
 class BottomUpRandomFlip:
     """Data augmentation with random image flip for bottom-up.
-
     Args:
         flip_prob (float): Probability of flip.
     """
@@ -350,20 +336,18 @@ class BottomUpRandomFlip:
         assert len(mask) == len(self.output_size)
 
         if np.random.random() < self.flip_prob:
-            image = image[:, ::-1] - np.zeros_like(image)
+            image = image[:, ::-1].copy() - np.zeros_like(image)
             for i, _output_size in enumerate(self.output_size):
-                mask[i] = mask[i][:, ::-1]
+                mask[i] = mask[i][:, ::-1].copy()
                 joints[i] = joints[i][:, self.flip_index]
                 joints[i][:, :, 0] = _output_size - joints[i][:, :, 0] - 1
         results['img'], results['mask'], results[
             'joints'] = image, mask, joints
         return results
 
-
 @PIPELINES.register_module()
 class BottomUpRandomAffine:
     """Data augmentation with random scaling & rotating.
-
     Args:
         rot_factor (int): Rotating to [-rotation_factor, rotation_factor]
         scale_factor (float): Scaling to [1-scale_factor, 1+scale_factor]
@@ -491,7 +475,6 @@ class BottomUpRandomAffine:
                     (mask[i] * 255).astype(np.uint8), mat_output,
                     (_output_size, _output_size)) / 255
                 mask[i] = (mask[i] > 0.5).astype(np.float32)
-
                 joints[i][:, :, 0:2] = \
                     warp_affine_joints(joints[i][:, :, 0:2], mat_output)
                 if results['ann_info']['scale_aware_sigma']:
@@ -501,15 +484,16 @@ class BottomUpRandomAffine:
                                                  self.input_size), aug_rot)[:2]
             image = cv2.warpAffine(image, mat_input, (self.input_size.item(),
                                                       self.input_size.item()))
+
         results['img'], results['mask'], results[
             'joints'] = image, mask, joints
+
         return results
 
 
 @PIPELINES.register_module()
 class BottomUpGenerateHeatmapTarget:
     """Generate multi-scale heatmap target for bottom-up.
-
     Args:
         sigma (int): Sigma of heatmap Gaussian
         max_num_people (int): Maximum number of people in an image
@@ -548,8 +532,7 @@ class BottomUpGenerateHeatmapTarget:
 
 @PIPELINES.register_module()
 class BottomUpGenerateTarget:
-    """Generate multi-scale heatmap target for bottom-up.
-
+    """Generate multi-scale heatmap target for associate embedding.
     Args:
         sigma (int): Sigma of heatmap Gaussian
         max_num_people (int): Maximum number of people in an image
@@ -586,13 +569,15 @@ class BottomUpGenerateTarget:
         for scale_id in range(results['ann_info']['num_scales']):
             target_t = heatmap_generator[scale_id](joints_list[scale_id])
             joints_t = joints_encoder[scale_id](joints_list[scale_id])
-
+            
             target_list.append(target_t.astype(np.float32))
             mask_list[scale_id] = mask_list[scale_id].astype(np.float32)
             joints_list[scale_id] = joints_t.astype(np.int32)
+
         results['img'], results['masks'], results[
             'joints'] = img, mask_list, joints_list
         results['targets'] = target_list
+
         return results
 
 
@@ -601,7 +586,6 @@ class BottomUpGeneratePAFTarget:
     """Generate multi-scale heatmaps and part affinity fields (PAF) target for
     bottom-up. Paper ref: Cao et al. Realtime Multi-Person 2D Human Pose
     Estimation using Part Affinity Fields (CVPR 2017).
-
     Args:
         limb_width (int): Limb width of part affinity fields
     """
@@ -623,9 +607,6 @@ class BottomUpGeneratePAFTarget:
         if self.skeleton is None:
             assert results['ann_info']['skeleton'] is not None
             self.skeleton = results['ann_info']['skeleton']
-        else:
-            assert np.array(
-                self.skeleton).max() < results['ann_info']['num_joints']
 
         paf_generator = \
             self._generate(results['ann_info']['heatmap_size'],
@@ -647,7 +628,6 @@ class BottomUpGetImgSize:
     """Get multi-scale image sizes for bottom-up, including base_size and
     test_scale_factor. Keep the ratio and the image is resized to
     `results['ann_info']['image_size']×current_scale`.
-
     Args:
         test_scale_factor (List[float]): Multi scale
         current_scale (int): default 1
@@ -668,6 +648,7 @@ class BottomUpGetImgSize:
         img = results['img']
 
         h, w, _ = img.shape
+
         # calculate the size for min_scale
         min_input_size = _ceil_to_multiples_of(self.min_scale * input_size, 64)
         if w < h:
@@ -709,7 +690,6 @@ class BottomUpGetImgSize:
 @PIPELINES.register_module()
 class BottomUpResizeAlign:
     """Resize multi-scale size and align transform for bottom-up.
-
     Args:
         transforms (List): ToTensor & Normalize
         use_udp (bool): To use unbiased data processing.
@@ -729,6 +709,7 @@ class BottomUpResizeAlign:
         input_size = results['ann_info']['image_size']
         test_scale_factor = results['ann_info']['test_scale_factor']
         aug_data = []
+
         for _, s in enumerate(sorted(test_scale_factor, reverse=True)):
             _results = results.copy()
             image_resized, _, _ = self._resize_align_multi_scale(

@@ -90,7 +90,7 @@ class TopLossHook(Hook):
         kept_sample = []
         results = runner.outputs["results"]
         for i in range(len(results)):
-            loss = results[i]['loss']
+            loss = results[i]['loss'].item()
 
             if loss > top_k_max_loss:
                 kept_sample.append(results[i])
@@ -182,7 +182,6 @@ class TopLossHook(Hook):
 
     def _visualize_heatmap(self, img, heatmap):
         """Draw heatmap images, one heatmap per keypoint"""
-        img = mmcv.imread(img)
         img = img.copy()
         heatmap_embedded_img = []
         for slice in heatmap:
@@ -211,9 +210,7 @@ class TopLossHook(Hook):
         for i, result in enumerate(results):
             pose_results = []
             img = result['image']
-            img = invTrans(img).detach().cpu().numpy()
-            img = np.transpose(img, (1,2,0))
-            img = (img*255).astype(np.uint8)
+            img = self.unnormalize_input(img)
             
             img_heatmap.append(self._visualize_heatmap(img, result['output_heatmap'][0]))
             target_img.append(self._draw_target(img, joints[i]))
@@ -259,4 +256,11 @@ class TopLossHook(Hook):
         imshow_keypoints(img, pose_result, skeleton, kpt_score_thr,
                          pose_kpt_color, pose_link_color, radius, thickness)
 
+        return img
+
+    @torch.no_grad()
+    def unnormalize_input(self, tensor: torch.Tensor) -> np.ndarray:
+        img = invTrans(tensor).detach().cpu().numpy()
+        img = np.transpose(img, (1, 2, 0))
+        img = (img * 255.0).astype(np.uint8)
         return img

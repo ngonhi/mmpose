@@ -175,9 +175,9 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
             # iterate over people
             for idx_person, kpt in enumerate(_preds):
                 # use bbox area
+                kpt = np.array(kpt)
                 area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (
                     np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
-
                 kpts[image_id].append({
                     'keypoints': kpt[:, 0:3],
                     'score': scores[idx][idx_person],
