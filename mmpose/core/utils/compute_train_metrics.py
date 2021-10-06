@@ -2,33 +2,23 @@
 import tempfile
 import warnings
 
-from mmcv.runner import EvalHook as _EvalHook
+from mmcv.runner import HOOKS, Hook
+from mmpose import apis
+# from mmpose.apis import single_gpu_test
 
-MMPOSE_GREATER_KEYS = [
-    'acc', 'ap', 'ar', 'pck', 'auc', '3dpck', 'p-3dpck', '3dauc', 'p-3dauc'
-]
-MMPOSE_LESS_KEYS = ['loss', 'epe', 'nme', 'mpjpe', 'p-mpjpe', 'n-mpjpe']
-
-
-class ComputeTrainMetricsHook(_EvalHook):
+@HOOKS.register_module()
+class ComputeTrainMetricsHook(Hook):
     def __init__(self,
                  dataloader,
-                 start=None,
-                 interval=1,
-                 by_epoch=True,
-                 save_best=None,
-                 rule=None,
-                 test_fn=None,
-                 greater_keys=MMPOSE_GREATER_KEYS,
-                 less_keys=MMPOSE_LESS_KEYS,
                  **eval_kwargs):
+        self.dataloader = dataloader
+        self.eval_kwargs = eval_kwargs
 
-        if test_fn is None:
-            from mmpose.apis import single_gpu_test
-            test_fn = single_gpu_test
-
-        super().__init__(dataloader, start, interval, by_epoch, save_best,
-                         rule, test_fn, greater_keys, less_keys, **eval_kwargs)
+    def after_train_epoch(self, runner):
+        """Called after every training epoch to evaluate the results."""
+        results = apis.single_gpu_test(runner.model, self.dataloader)
+        runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
+        self.evaluate(runner, results)
 
     def evaluate(self, runner, results):
         """Evaluate the results.

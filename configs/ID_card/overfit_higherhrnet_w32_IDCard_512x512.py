@@ -5,7 +5,8 @@ resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrn
 workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
-work_dir = './work_dirs/baseline_higherhrnet_no_pretrained'
+evaluation_train = dict(interval=1, metric='mAP')
+work_dir = './work_dirs/baseline_higherhrnet'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -25,7 +26,7 @@ log_config = dict(
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
-runner = dict(type='EpochBasedRunner', max_epochs=10)
+runner = dict(type='EpochBasedRunner', max_epochs=200)
 # runner = dict(type='IterBasedRunner', max_iters=3000)
 
 channel_cfg = dict(
@@ -110,7 +111,7 @@ model = dict(
         img_size=data_cfg['image_size'],
         topk=9,
         base_size=data_cfg['base_size'],
-        sigmas=[0.025, 0.025, 0.025, 0.025]),
+        sigmas=[1.0, 1.0, 1.0, 1.0]),
     test_cfg=dict(
         num_joints=channel_cfg['dataset_joints'],
         max_num_people=5,
@@ -132,42 +133,9 @@ model = dict(
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='Resize'),
+    dict(type='BottomUpGetImgSize', test_scale_factor=[1]), # required for forward_test
     dict(
-        type='BottomUpRandomAffine', # To resize image, mask and keypoints
-        rot_factor=0,
-        scale_factor=[1.0, 1.0],
-        scale_type='short',
-        trans_factor=0),
-    # dict(type='BottomUpRandomFlip', flip_prob=0.5),
-    dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
-    dict(type='ToTensor'),
-    dict(
-        type='NormalizeTensor',
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]),
-    dict(
-        type='BottomUpGenerateTarget',
-        sigma=2,
-        max_num_people=5,
-    ),
-    dict(
-        type='Collect',
-        keys=['img', 'joints', 'targets', 'masks'],
-        meta_keys=['image_file', 'center', 'scale', 'test_scale_factor', 'base_size', 'rescale']),
-]
-
-val_pipeline = [
-    dict(type='LoadImageFromFile'),
-    dict(type='Resize'),
-    dict(
-        type='BottomUpRandomAffine',
-        rot_factor=0,
-        scale_factor=[1.0, 1.0],
-        scale_type='short',
-        trans_factor=0),
-    dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
-    dict(
-        type='BottomUpResizeAlign',
+        type='BottomUpResizeAlign', # required for forward_test
         transforms=[
             dict(type='ToTensor'),
             dict(
@@ -175,9 +143,9 @@ val_pipeline = [
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]),
         ]),
-    dict(type='ToTensor'), #required
+    dict(type='ToTensor'),
     dict(
-        type='NormalizeTensor', #required
+        type='NormalizeTensor',
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225]),
     dict(
@@ -194,15 +162,41 @@ val_pipeline = [
         ]),
 ]
 
+val_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='Resize'),
+    dict(type='BottomUpGetImgSize', test_scale_factor=[1]), # required for forward_test
+    dict(
+        type='BottomUpResizeAlign', # required for forward_test
+        transforms=[
+            dict(type='ToTensor'),
+            dict(
+                type='NormalizeTensor',
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+        ]),
+    dict(type='ToTensor'), #required for calculate loss
+    dict(
+        type='NormalizeTensor', #required for calculate loss
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]),
+    dict(
+        type='BottomUpGenerateTarget', # required for calculate loss
+        sigma=2,
+        max_num_people=5,
+    ),
+    dict(
+        type='Collect',
+        keys=['img', 'joints', 'targets', 'masks'],
+        meta_keys=[
+            'image_file', 'aug_data', 'test_scale_factor', 'base_size',
+            'center', 'scale', 'flip_index', 'rescale'
+        ]),
+]
+
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    # dict(type='Resize', is_train=False),
-    # dict(
-    #     type='BottomUpRandomAffine',
-    #     rot_factor=0,
-    #     scale_factor=[1.0, 1.0],
-    #     scale_type='short',
-    #     trans_factor=0),
+    dict(type='Resize', is_train=False),
     dict(type='BottomUpGetImgSize', test_scale_factor=[1]),
     dict(
         type='BottomUpResizeAlign',
@@ -213,16 +207,6 @@ test_pipeline = [
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]),
         ]),
-    # dict(type='ToTensor'), #required
-    # dict(
-    #     type='NormalizeTensor', #required
-    #     mean=[0.485, 0.456, 0.406],
-    #     std=[0.229, 0.224, 0.225]),
-    # dict(
-    #     type='BottomUpGenerateTarget',
-    #     sigma=2,
-    #     max_num_people=5,
-    # ),
     dict(
         type='Collect',
         keys=['img'],

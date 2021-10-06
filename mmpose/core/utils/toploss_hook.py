@@ -159,16 +159,17 @@ class TopLossHook(Hook):
         img_copy = cv2.putText(img_copy, text, (x+5, y+5 + text_h + font_scale - 1), font, font_scale, text_color, font_thickness)
         return img_copy
 
-    def _add_figure_title(self, visualize_output):
+    def _add_figure_title(self, visualize_output, image_names):
         num_top_k, num_img, h, w, _ = visualize_output.shape
         ret_output = np.zeros((num_top_k, h+50, w*num_img, 3), dtype=np.uint8)
         font=cv2.FONT_HERSHEY_PLAIN
         font_scale=2
         font_thickness=1
         text_color = (0, 0, 0)
-        texts = ['keypoint target', 'keypoint prediction', 
+        texts = ['', 'keypoint prediction', 
                     'top_left heatmap', 'bottom_left heatmap', 'bottom_right heatmap', 'top_right heatmap']
         for i in range(num_top_k):
+            texts[0] = image_names[i]
             for j in range(num_img):
                 text_size, _ = cv2.getTextSize(texts[j], font, font_scale, font_thickness)
                 text_w, text_h = text_size
@@ -207,7 +208,9 @@ class TopLossHook(Hook):
         img_keypoint = []
         img_heatmap = []
         target_img = []
+        image_names = []
         for i, result in enumerate(results):
+            image_names.append(os.path.basename(result['image_paths'][0])[:-4])
             pose_results = []
             img = result['image']
             img = self.unnormalize_input(img)
@@ -236,7 +239,7 @@ class TopLossHook(Hook):
         target_img = np.array(target_img) \
             .reshape(len(results), 1, target_img[0].shape[0], target_img[0].shape[1], target_img[0].shape[2])
         visualize_output = np.concatenate((target_img, img_keypoint, img_heatmap), axis=1)
-        visualize_output = self._add_figure_title(visualize_output)
+        visualize_output = self._add_figure_title(visualize_output, image_names)
 
         return visualize_output
 

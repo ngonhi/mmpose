@@ -131,7 +131,8 @@ def train_model(model,
     if top_k_top_losses > batch_size:
         top_k_top_losses = batch_size
     runner.register_hook(TopLossHook(top_k_top_losses))
-    runner.register_hook(ComputeTrainMetricsHook(data_loaders[0]))
+    eval_train_cfg = cfg.get('evaluation_train', {})
+    runner.register_hook(ComputeTrainMetricsHook(data_loaders[0], **eval_train_cfg))
 
     # register eval hooks for validation set
     if validate:
