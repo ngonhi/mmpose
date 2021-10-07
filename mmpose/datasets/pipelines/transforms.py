@@ -25,8 +25,8 @@ class Resize:
             dict: Resized results
         """
         input_size = (int(results['ann_info']['image_size']), int(results['ann_info']['image_size']))
-        output_size = results['ann_info']['heatmap_size']
-        img, mask, joints = results['img'], results['mask'], results['joints']
+        
+        img = results['img']
         img_shape = img.shape
         w_scale = img_shape[1]/input_size[0]
         h_scale = img_shape[0]/input_size[1]
@@ -35,6 +35,8 @@ class Resize:
         if not self.is_train:
             img, w, h = mmcv.imresize(img, input_size, interpolation='bicubic', backend='cv2', return_scale=True)
         else:
+            output_size = results['ann_info']['heatmap_size']
+            mask, joints = results['mask'], results['joints']
             # Resize image
             if random.random() < 0.5: # Random interpolation with opencv and pillow
                 backend = 'cv2' if random.random() < 0.5 else 'pillow'
@@ -69,7 +71,7 @@ class Resize:
                 h_scale = img_shape[0]/_output_size
                 joints[i][:, :, 0] = joints[i][:, :, 0] / w_scale
                 joints[i][:, :, 1] = joints[i][:, :, 1] / h_scale
-    
-        results['img'], results['mask'], results['joints'] = img, mask, joints
+            results['mask'], results['joints'] = mask, joints
+        results['img'] = img
         
         return results
