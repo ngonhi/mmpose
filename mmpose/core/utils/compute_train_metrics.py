@@ -62,11 +62,12 @@ class ComputeTrainMetricsHook(Hook):
         return eval_res
 
     def update(self, eval_res, n):
+        self.count += n
         for name, val in eval_res.items():
             if name not in self.sum:       
                 self.sum[name] = val*n
             else:
                 self.sum[name] += val*n
-            self.count += n
+        
             self.avg[name] = self.sum[name]/self.count
             
