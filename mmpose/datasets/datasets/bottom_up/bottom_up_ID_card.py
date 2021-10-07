@@ -187,6 +187,7 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
                 })
 
         valid_kpts = []
+        imgIds = []
         for img in kpts.keys():
             img_kpts = kpts[img]
             if self.use_nms:
@@ -195,10 +196,11 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
                 valid_kpts.append([img_kpts[_keep] for _keep in keep])
             else:
                 valid_kpts.append(img_kpts)
+            imgIds.append(img)
 
         self._write_coco_keypoint_results(valid_kpts, res_file)
 
-        info_str = self._do_python_keypoint_eval(res_file)
+        info_str = self._do_python_keypoint_eval(res_file, imgIds)
         name_value = OrderedDict(info_str)
         return name_value
 
@@ -251,9 +253,8 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
 
         return cat_results
 
-    def _do_python_keypoint_eval(self, res_file):
+    def _do_python_keypoint_eval(self, res_file, imgIds=None):
         """Keypoint evaluation using COCOAPI."""
-
         stats_names = [
             'AP', 'AP .5', 'AP .75', 'AP (M)', 'AP (L)', 'AR', 'AR .5',
             'AR .75', 'AR (M)', 'AR (L)'
@@ -266,10 +267,11 @@ class BottomUpIDCardDataset(Kpt2dSviewRgbImgBottomUpDataset):
                     0,
                 ] * len(stats_names)))
                 return info_str
-
         coco_det = self.coco.loadRes(res_file)
         coco_eval = COCOeval(self.coco, coco_det, 'keypoints', self.sigmas)
         coco_eval.params.useSegm = None
+        if imgIds:
+            coco_eval.params.imgIds = imgIds  
         coco_eval.evaluate()
         coco_eval.accumulate()
         coco_eval.summarize()
