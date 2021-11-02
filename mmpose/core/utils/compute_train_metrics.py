@@ -27,14 +27,16 @@ class ComputeTrainMetricsHook(Hook):
     def after_train_iter(self, runner):
         """Called after every training iteration to aggregate the results."""
         results = runner.outputs['results']
+        temp = [None]*len(results)
         for n, result in enumerate(results):
+            temp[n] = result.copy()
+            temp[n]['preds'] = result['preds'].copy()
             for j, item in enumerate(result['preds']):
                 w_scale, h_scale = result['rescale']
-                item[:, 0] = item[:, 0] * w_scale
-                item[:, 1] = item[:, 1] * h_scale
-                result['preds'][j] = item
-            results[n] = result
-        eval_res = self.evaluate(runner, results)
+                temp[n]['preds'][j] = item.copy()
+                temp[n]['preds'][j][:, 0] = item[:, 0] * w_scale
+                temp[n]['preds'][j][:, 1] = item[:, 1] * h_scale
+        eval_res = self.evaluate(runner, temp)
         n = len(results)
         self.update(eval_res, n)
 
