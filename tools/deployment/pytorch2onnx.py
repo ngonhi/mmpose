@@ -58,11 +58,20 @@ def pytorch2onnx(model,
         verify (bool): Determines whether to verify the onnx model.
             Default: False.
     """
-    model.cpu().eval()
-
-    one_img = torch.randn(input_shape)
+    model.cuda().eval()
+    if input_shape[0] == 0:
+        input_shape[0] = None
+    input_shape = tuple(input_shape)
+    one_img = torch.randn(input_shape, device='cuda')
 
     register_extra_symbolics(opset_version)
+    # model.to_onnx(output_file, 
+    #                 one_img,
+                    
+    #                 input_names = ['input'],   # the model's input names
+    #                 output_names = ['output'], # the model's output names
+    #                 dynamic_axes={'input' : {0 : 'batch_size'},    # variable length axes
+    #                                 'output' : {0 : 'batch_size'}})
     torch.onnx.export(
         model,
         one_img,
@@ -70,9 +79,14 @@ def pytorch2onnx(model,
         export_params=True,
         keep_initializers_as_inputs=True,
         verbose=show,
-        opset_version=opset_version)
+        opset_version=opset_version,
+        input_names = ['input'],   # the model's input names
+        output_names = ['output'], # the model's output names
+        dynamic_axes={'input' : {0 : 'batch_size'},    # variable length axes
+                    'output' : {0 : 'batch_size'}})
 
     print(f'Successfully exported ONNX model: {output_file}')
+
     if verify:
         # check by onnx
         onnx_model = onnx.load(output_file)
@@ -94,16 +108,15 @@ def pytorch2onnx(model,
         assert len(net_feed_input) == 1
         sess = rt.InferenceSession(output_file)
         onnx_results = sess.run(None,
-                                {net_feed_input[0]: one_img.detach().numpy()})
+                                {net_feed_input[0]: one_img.detach().cpu().numpy()})
 
         # compare results
         assert len(pytorch_results) == len(onnx_results)
         for pt_result, onnx_result in zip(pytorch_results, onnx_results):
             assert np.allclose(
-                pt_result.detach().cpu(), onnx_result, atol=1.e-5
+                pt_result.detach().cpu().numpy(), onnx_result, atol=1.e-3
             ), 'The outputs are different between Pytorch and ONNX'
         print('The numerical values are same between Pytorch and ONNX')
-
 
 def parse_args():
     parser = argparse.ArgumentParser(

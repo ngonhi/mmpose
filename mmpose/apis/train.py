@@ -5,7 +5,7 @@ import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import DistSamplerSeedHook, OptimizerHook, build_runner
 
-from mmpose.core import DistEvalHook, EvalHook, build_optimizers, TopLossHook, ComputeTrainMetricsHook
+from mmpose.core import DistEvalHook, EvalHook, build_optimizers, TopLossHook, ComputeMetricsHook
 from mmpose.core.distributed_wrapper import DistributedDataParallelWrapper
 from mmpose.datasets import build_dataloader, build_dataset
 from mmpose.utils import get_root_logger
@@ -132,7 +132,20 @@ def train_model(model,
         top_k_top_losses = batch_size
     runner.register_hook(TopLossHook(top_k_top_losses))
     eval_train_cfg = cfg.get('evaluation_train', {})
-    runner.register_hook(ComputeTrainMetricsHook(data_loaders[0], **eval_train_cfg))
+    eval_val_cfg = cfg.get('evaluation', {})
+    val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
+    dataloader_setting = dict(
+        samples_per_gpu=cfg.data.get('samples_per_gpu', 1),
+        workers_per_gpu=cfg.data.get('workers_per_gpu', {}),
+        # cfg.gpus will be ignored if distributed
+        num_gpus=len(cfg.gpu_ids),
+        dist=distributed,
+        drop_last=False,
+        shuffle=False)
+    dataloader_setting = dict(dataloader_setting,
+                                  **cfg.data.get('val_dataloader', {}))
+    val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
+    runner.register_hook(ComputeMetricsHook([data_loaders[0], val_dataloader], eval_train_cfg, eval_val_cfg))
 
     # register eval hooks for validation set
     if validate:

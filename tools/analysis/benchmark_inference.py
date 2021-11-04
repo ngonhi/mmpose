@@ -18,7 +18,7 @@ def parse_args():
         description='MMPose benchmark a recognizer')
     parser.add_argument('config', help='test config file path')
     parser.add_argument(
-        '--log-interval', default=10, help='interval of logging')
+        '--log-interval', default=1000, help='interval of logging')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -40,7 +40,7 @@ def main():
     dataset = build_dataset(cfg.data.val)
     data_loader = build_dataloader(
         dataset,
-        samples_per_gpu=1,
+        samples_per_gpu=16,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=False,
         shuffle=False)
@@ -71,8 +71,8 @@ def main():
 
         if i >= num_warmup:
             pure_inf_time += elapsed
+            its = (i + 1 - num_warmup) / pure_inf_time
             if (i + 1) % args.log_interval == 0:
-                its = (i + 1 - num_warmup) / pure_inf_time
                 print(f'Done item [{i + 1:<3}],  {its:.2f} items / s')
     print(f'Overall average: {its:.2f} items / s')
     print(f'Total time: {pure_inf_time:.2f} s')

@@ -6,7 +6,7 @@ workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
 evaluation_train = dict(interval=1, metric='mAP')
-work_dir = './work_dirs/baseline_2_higherhrnet'
+work_dir = './work_dirs/baseline_2_higherhrnet_filter_kpt_v2_1024x1024'
 optimizer = dict(
     type='Adam',
     lr=0.0015,
@@ -39,10 +39,10 @@ channel_cfg = dict(
     ])
 
 data_cfg = dict(
-    image_size=512,
-    base_size=256,
+    image_size=640,
+    base_size=320,
     base_sigma=2,
-    heatmap_size=[128, 256],
+    heatmap_size=[160, 320],
     num_joints=channel_cfg['dataset_joints'],
     dataset_channel=channel_cfg['dataset_channel'],
     inference_channel=channel_cfg['inference_channel'],
@@ -217,8 +217,8 @@ test_pipeline = [
 ]
 
 
-samples_per_gpu = 16
-data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
+samples_per_gpu = 8
+data_root = '/mnt/ssd/marley/ID_Card/ID_card_data/filter_kpt'
 data = dict(
     samples_per_gpu=samples_per_gpu,
     workers_per_gpu=8,
@@ -240,8 +240,8 @@ data = dict(
         dataset_info={{_base_.dataset_info}}),
     test=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/val_annotations.json',
-        img_prefix=f'{data_root}/val/',
+        ann_file=f'{data_root}/annotations/test_coco_annotations.json',
+        img_prefix=f'{data_root}/test/',
         data_cfg=data_cfg,
         pipeline=test_pipeline,
         dataset_info={{_base_.dataset_info}}),

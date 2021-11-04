@@ -174,7 +174,7 @@ class AssociativeEmbedding(BasePose):
         """
         output = self.backbone(img)
         if self.with_keypoint:
-            output = self.keypoint_head(output)
+            output = self.keypoint_head(output) # [(1,8,128,128), (1,4,256,256)]
 
         # if return loss
         losses = dict()
@@ -242,7 +242,8 @@ class AssociativeEmbedding(BasePose):
             image_resized = aug_data[idx].to(img.device)
             features = self.backbone(image_resized)
             if self.with_keypoint:
-                outputs = self.keypoint_head(features)
+                outputs = self.keypoint_head(features) # [(1,8,128,128), (1,4,256,256)]
+
             if self.test_cfg.get('flip_test', True):
                 # use flip test
                 features_flipped = self.backbone(
@@ -252,7 +253,7 @@ class AssociativeEmbedding(BasePose):
             else:
                 outputs_flipped = None
 
-            _, heatmaps, tags = get_multi_stage_outputs(
+            _, heatmaps, tags = get_multi_stage_outputs( # [(1,4,512,512),(1,4,512,512)]
                 outputs,
                 outputs_flipped,
                 self.test_cfg['num_joints'],
@@ -264,7 +265,7 @@ class AssociativeEmbedding(BasePose):
                 base_size,
                 align_corners=self.use_udp)
 
-            aggregated_heatmaps, tags_list = aggregate_results(
+            aggregated_heatmaps, tags_list = aggregate_results( # aggregated_heatmaps: (1,4,512,512), tags_list: [(1,4,512,512,1),(1,4,512,512,1)]
                 s,
                 aggregated_heatmaps,
                 tags_list,
@@ -274,29 +275,30 @@ class AssociativeEmbedding(BasePose):
                 self.test_cfg['project2image'],
                 self.test_cfg.get('flip_test', True),
                 align_corners=self.use_udp)
-        
+ 
         # average heatmaps of different scales
         aggregated_heatmaps = aggregated_heatmaps / float(
             len(test_scale_factor))
-        tags = torch.cat(tags_list, dim=4)
+        tags = torch.cat(tags_list, dim=4) # (1,4,512,512,2)
 
         results = []
         for i in range(len(img_metas)):
             result = {}
             
-            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0)
-            _tags = torch.unsqueeze(tags[i], 0)
+            _aggregated_heatmaps = torch.unsqueeze(aggregated_heatmaps[i], dim=0) # (4,512,512)
+            _tags = torch.unsqueeze(tags[i], 0) # (4,512,512,2)
             # perform grouping
-            grouped, scores = self.parser.parse(_aggregated_heatmaps, _tags,
+            grouped, scores = self.parser.parse(_aggregated_heatmaps, _tags, # grouped: [(2,4,5)]
                                                 self.test_cfg['adjust'],
                                                 self.test_cfg['refine'])
-
+            # print(len(grouped), grouped[0].shape)
             preds = get_group_preds(
                 grouped,
                 center,
                 scale, [_aggregated_heatmaps.size(3),
                         _aggregated_heatmaps.size(2)],
                 use_udp=self.use_udp)
+
             # Rescale to original dataset scale
             if 'rescale' in img_metas[i]:
                 if len(preds) > 0:

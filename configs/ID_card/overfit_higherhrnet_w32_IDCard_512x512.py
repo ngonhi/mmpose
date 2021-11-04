@@ -1,7 +1,7 @@
 _base_ = ['../_base_/datasets/ID_card.py']
 log_level = 'INFO'
 load_from = 'https://download.openmmlab.com/mmpose/bottom_up/higher_hrnet32_coco_512x512-8ae85183_20200713.pth'
-resume_from = None #'/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrnet/best_AP_epoch_12.pth'
+resume_from = '/mnt/ssd/marley/ID_Card/mmpose/work_dirs/baseline_higherhrnet/latest.pth'
 workflow = [('train', 1), ('val', 1)]
 checkpoint_config = dict(interval=1)
 evaluation = dict(interval=1, metric='mAP', save_best='AP')
@@ -217,7 +217,7 @@ test_pipeline = [
 ]
 
 
-samples_per_gpu = 16
+samples_per_gpu = 1
 data_root = '/mnt/ssd/marley/ID_Card/ID_card_data'
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -240,8 +240,8 @@ data = dict(
         dataset_info={{_base_.dataset_info}}),
     test=dict(
         type='BottomUpIDCardDataset',
-        ann_file=f'{data_root}/annotations/val_annotations.json',
-        img_prefix=f'{data_root}/val/',
+        ann_file='/mnt/ssd/marley/ID_Card/ID_card_data/filter_kpt/annotations/test_coco_annotations.json',
+        img_prefix='/mnt/ssd/marley/ID_Card/ID_card_data/filter_kpt/test/',
         data_cfg=data_cfg,
         pipeline=test_pipeline,
         dataset_info={{_base_.dataset_info}}),

@@ -18,7 +18,7 @@ from mmpose.models import build_posenet
 from mmpose.utils import collect_env, get_root_logger
 
 from clearml import Task
-task = Task.init(project_name='ID card crop and alignment', task_name='baseline_higherhrnet')
+task = Task.init(project_name='ID card crop and alignment', task_name='baseline_2_higherhrnet_110421_filter_kpt_v2_1024x1024')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a pose model')
