@@ -47,17 +47,20 @@ def main():
     images = [os.path.join(image_dir, f) for f in os.listdir(image_dir)]
     for image in tqdm(images):
         try:
-            keypoint_results, _ = inference_bottom_up_pose_model(model, image, 'BottomUpIDCardDataset', dataset_info, return_heatmap=False)
-            # Filter confidence score less than 0.3
-            keypoint_results = [kp for kp in keypoint_results if kp['score'] >= 0.0]
-            # print(keypoint_results)
+            keypoint_results, _ = inference_bottom_up_pose_model(model, image, 'BottomUpIDCardDataset', 
+                                                                dataset_info, return_heatmap=False,
+                                                                pose_nms_thr=0.5)
+            # Filter confidence score less than 0.1
+            keypoint_results = [kp for kp in keypoint_results if kp['score'] >= 0.1]
+            img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB)
             vis_result = vis_pose_result(model,
-                             image,
+                             img,
                              keypoint_results,
                              radius=10,
                              thickness=5,
                              dataset=model.cfg.data.test.type,
                              show=False)
+            vis_result = cv2.cvtColor(vis_result, cv2.COLOR_RGB2BGR)
             cv2.imwrite(os.path.join(output_dir, os.path.basename(image)), vis_result)
         except:
             print("Failed to process image: {}".format(image))

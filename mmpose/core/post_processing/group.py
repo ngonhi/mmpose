@@ -77,7 +77,6 @@ def _match_by_tag(inp, params):
         else:
             grouped_keys = list(joint_dict.keys())[:params.max_num_people]
             grouped_tags = [np.mean(tag_dict[i], axis=0) for i in grouped_keys]
-
             if (params.ignore_too_much
                     and len(grouped_keys) == params.max_num_people):
                 continue
@@ -111,7 +110,6 @@ def _match_by_tag(inp, params):
                     joint_dict.setdefault(key, np.copy(default_))[idx] = \
                         joints[row]
                     tag_dict[key] = [tags[row]]
-
     ans = np.array([joint_dict[i] for i in joint_dict]).astype(np.float32)
     return ans
 

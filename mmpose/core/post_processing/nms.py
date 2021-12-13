@@ -116,7 +116,6 @@ def oks_nms(kpts_db, thr, sigmas=None, vis_thr=None):
 
         oks_ovr = oks_iou(kpts[i], kpts[order[1:]], areas[i], areas[order[1:]],
                           sigmas, vis_thr)
-
         inds = np.where(oks_ovr <= thr)[0]
         order = order[inds + 1]
 

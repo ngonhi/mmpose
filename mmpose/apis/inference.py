@@ -541,6 +541,7 @@ def inference_bottom_up_pose_model(model,
             })
 
         # pose nms
+        print(pose_nms_thr)
         keep = oks_nms(pose_results, pose_nms_thr, sigmas=cfg.dataset_info.sigmas)
         pose_results = [pose_results[_keep] for _keep in keep]
 
@@ -594,7 +595,7 @@ def vis_pose_result(model,
             #show the results
             skeleton = [[0, 1], [1, 2], [2, 3], [3, 0]]
             pose_link_color = [[128, 255, 0], [0, 255, 128], [255, 128, 0], [255, 128, 128]]
-            pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [128, 128, 128]]
+            pose_kpt_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [162, 40, 255]]
         elif dataset in ('TopDownCocoDataset', 'BottomUpCocoDataset',
                        'TopDownOCHumanDataset', 'AnimalMacaqueDataset'):
             # show the results

@@ -148,22 +148,22 @@ def train_model(model,
     runner.register_hook(ComputeMetricsHook([data_loaders[0], val_dataloader], eval_train_cfg, eval_val_cfg))
 
     # register eval hooks for validation set
-    if validate:
-        eval_cfg = cfg.get('evaluation', {})
-        val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
-        dataloader_setting = dict(
-            samples_per_gpu=cfg.data.get('samples_per_gpu', 1),
-            workers_per_gpu=cfg.data.get('workers_per_gpu', {}),
-            # cfg.gpus will be ignored if distributed
-            num_gpus=len(cfg.gpu_ids),
-            dist=distributed,
-            drop_last=False,
-            shuffle=False)
-        dataloader_setting = dict(dataloader_setting,
-                                  **cfg.data.get('val_dataloader', {}))
-        val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
-        eval_hook = DistEvalHook if distributed else EvalHook
-        runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
+    # if validate:
+    #     eval_cfg = cfg.get('evaluation', {})
+    #     val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
+    #     dataloader_setting = dict(
+    #         samples_per_gpu=cfg.data.get('samples_per_gpu', 1),
+    #         workers_per_gpu=cfg.data.get('workers_per_gpu', {}),
+    #         # cfg.gpus will be ignored if distributed
+    #         num_gpus=len(cfg.gpu_ids),
+    #         dist=distributed,
+    #         drop_last=False,
+    #         shuffle=False)
+    #     dataloader_setting = dict(dataloader_setting,
+    #                               **cfg.data.get('val_dataloader', {}))
+    #     val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
+    #     eval_hook = DistEvalHook if distributed else EvalHook
+    #     runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)

@@ -291,7 +291,6 @@ class AssociativeEmbedding(BasePose):
             grouped, scores = self.parser.parse(_aggregated_heatmaps, _tags, # grouped: [(2,4,5)]
                                                 self.test_cfg['adjust'],
                                                 self.test_cfg['refine'])
-            # print(len(grouped), grouped[0].shape)
             preds = get_group_preds(
                 grouped,
                 center,
@@ -452,7 +451,7 @@ class AssociativeEmbedding(BasePose):
             result['loss'] = sum_loss[i].detach().cpu().numpy()
             result['rescale'] = img_metas[i]['rescale']
             results.append(result)
-        
+
         return results
 
         

@@ -157,9 +157,9 @@ def imshow_keypoints(img,
             for sk_id, sk in enumerate(skeleton):
                 pos1 = (int(kpts[sk[0], 0]), int(kpts[sk[0], 1]))
                 pos2 = (int(kpts[sk[1], 0]), int(kpts[sk[1], 1]))
-                if (pos1[0] > 0 and pos1[0] < img_w and pos1[1] > 0
-                        and pos1[1] < img_h and pos2[0] > 0 and pos2[0] < img_w
-                        and pos2[1] > 0 and pos2[1] < img_h
+                if (pos1[0] >= 0 and pos1[0] <= img_w and pos1[1] >= 0
+                        and pos1[1] <= img_h and pos2[0] >= 0 and pos2[0] <= img_w
+                        and pos2[1] >= 0 and pos2[1] <= img_h
                         and kpts[sk[0], 2] > kpt_score_thr
                         and kpts[sk[1], 2] > kpt_score_thr):
                     r, g, b = pose_link_color[sk_id]

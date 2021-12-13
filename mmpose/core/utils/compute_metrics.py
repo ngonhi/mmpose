@@ -68,7 +68,12 @@ class ComputeMetricsHook(Hook):
                 temp[n]['preds'][j] = item.copy()
                 temp[n]['preds'][j][:, 0] = item[:, 0] * w_scale
                 temp[n]['preds'][j][:, 1] = item[:, 1] * h_scale
-        self.val_results += temp
+        self.val_results += [{
+            'preds': t['preds'],
+            'scores': t['scores'],
+            'image_paths': t['image_paths'],
+            'output_heatmap': None
+        } for t in temp]
 
     def after_val_epoch(self, runner):
         """Called after every validation epoch to evaluate the results."""
